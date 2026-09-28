@@ -161,6 +161,7 @@ class App(ctk.CTk):
         self.fetched_playlist_title = ""
 
         self._build_ui()
+        self._check_js_runtime()
 
     def _build_ui(self):
         # Main scrollable container
@@ -542,15 +543,41 @@ class App(ctk.CTk):
             pass
 
     def _update_and_restart(self):
-        """Pull latest code from GitHub and restart the application cleanly."""
+        """Pull latest code from GitHub, install dependencies and restart the application cleanly."""
         self._update_status("🔄 Checking for updates from GitHub...")
         try:
-            subprocess.run(["git", "fetch", "origin", "main"], timeout=10)
-            subprocess.run(["git", "reset", "--hard", "origin/main"], timeout=10)
+            subprocess.run(["git", "fetch", "origin", "main"], timeout=15)
+            subprocess.run(["git", "reset", "--hard", "origin/main"], timeout=15)
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"], timeout=45)
+            if sys.platform.startswith('linux') and not shutil.which('node'):
+                subprocess.run(["apt", "install", "-y", "nodejs"], timeout=60)
         except Exception:
             pass
         python = sys.executable
         os.execl(python, python, *sys.argv)
+
+    def _check_js_runtime(self):
+        """Ensure a JavaScript runtime (Node.js/Deno) is available for YouTube JS challenge solving."""
+        def worker():
+            has_node = shutil.which('node') is not None
+            has_deno = shutil.which('deno') is not None
+            if not has_node and not has_deno:
+                self.after(0, lambda: self._log("⚠️ Node.js missing! YouTube requires Node.js to decrypt video streams."))
+                if sys.platform.startswith('linux'):
+                    self.after(0, lambda: self._log("⏳ Auto-installing Node.js via apt..."))
+                    try:
+                        subprocess.run(['apt', 'update', '-y'], timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(['apt', 'install', '-y', 'nodejs'], timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        if shutil.which('node'):
+                            self.after(0, lambda: self._log("✅ Node.js successfully installed! YouTube streams unlocked."))
+                        else:
+                            self.after(0, lambda: self._log("❌ Could not auto-install Node.js. Run: apt install -y nodejs in terminal."))
+                    except Exception as e:
+                        self.after(0, lambda: self._log(f"⚠️ Run 'apt install -y nodejs' in terminal: {e}"))
+            else:
+                rt = 'Node.js' if has_node else 'Deno'
+                self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt} active (YouTube challenge solver enabled)"))
+        threading.Thread(target=worker, daemon=True).start()
 
     def _browse_dir(self):
         directory = filedialog.askdirectory()
