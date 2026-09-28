@@ -35,6 +35,8 @@ cookies.txt
 # Distribution / packaging
 build/
 dist/
+*.exe
+*.spec
 *.egg-info/
 .eggs/
 

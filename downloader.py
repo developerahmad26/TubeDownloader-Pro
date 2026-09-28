@@ -16,6 +16,19 @@ from config import (
 
 def get_ffmpeg_dir():
     """Find directory containing ffmpeg and ffprobe binaries."""
+    # 0. Check PyInstaller frozen executable directory or bundle
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        for sub in ['', 'bin', 'ffmpeg']:
+            candidate = os.path.join(exe_dir, sub)
+            if os.path.exists(os.path.join(candidate, 'ffmpeg.exe')) or os.path.exists(os.path.join(candidate, 'ffmpeg')):
+                return candidate
+        if hasattr(sys, '_MEIPASS'):
+            for sub in ['', 'bin', 'ffmpeg']:
+                candidate = os.path.join(sys._MEIPASS, sub)
+                if os.path.exists(os.path.join(candidate, 'ffmpeg.exe')) or os.path.exists(os.path.join(candidate, 'ffmpeg')):
+                    return candidate
+
     # 1. Check Python site-packages static_ffmpeg
     try:
         import site
@@ -203,7 +216,7 @@ class DownloadManager:
     @classmethod
     def find_cookie_file(cls):
         """Search all possible locations for a valid YouTube cookies file (ignores Rumble/other sites)."""
-        app_dir = os.path.dirname(os.path.abspath(__file__))
+        app_dir = os.path.dirname(os.path.abspath(sys.executable)) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
         home_dir = os.path.expanduser("~")
         candidates = [
             os.path.join(app_dir, "cookies.txt"),

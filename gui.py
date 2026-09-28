@@ -164,6 +164,17 @@ class App(ctk.CTk):
         self.geometry("1020x840")
         self.minsize(940, 720)
 
+        # Set window and taskbar icon
+        try:
+            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                icon_path = os.path.join(sys._MEIPASS, "assets", "icon.ico")
+            else:
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+        except Exception:
+            pass
+
         # Load persistent application default settings
         self.app_settings = load_app_settings()
 

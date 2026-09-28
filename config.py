@@ -6,6 +6,16 @@ import os
 APP_NAME = "YT Video Downloader Pro"
 APP_VERSION = "1.0.0"
 
+import sys
+
+def get_base_dir():
+    """Return application base directory (works for both dev mode and PyInstaller frozen exe)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = get_base_dir()
+
 # Default download directory
 DEFAULT_DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "YT Downloads")
 
@@ -33,8 +43,8 @@ NAMING_SCHEMES = {
 }
 
 # Persistent data paths
-BATCHES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "batches.json")
-SCHEDULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedules.json")
+BATCHES_FILE = os.path.join(BASE_DIR, "batches.json")
+SCHEDULES_FILE = os.path.join(BASE_DIR, "schedules.json")
 
 # Video selection modes
 SELECTION_MODES = {
@@ -50,7 +60,7 @@ VIDEO_FORMATS = ["mp4", "mkv", "webm", "avi"]
 AUDIO_FORMATS = ["mp3", "m4a", "wav", "flac", "opus"]
 
 # Application Settings file & defaults
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 
 DEFAULT_APP_SETTINGS = {
     "default_quality": "Best Quality",

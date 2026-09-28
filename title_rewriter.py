@@ -7,8 +7,9 @@ import json
 import os
 import re
 import urllib.request
+from config import BASE_DIR
 
-RULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "title_rules.json")
+RULES_FILE = os.path.join(BASE_DIR, "title_rules.json")
 
 DEFAULT_RULES = {
     "rewrite_mode": "smart_rephrase",  # 'smart_rephrase', 'hook', 'reorder', 'ai_gemini', 'clean_only'
