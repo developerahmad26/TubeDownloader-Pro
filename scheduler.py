@@ -13,9 +13,10 @@ from config import SCHEDULES_FILE
 class DownloadScheduler:
     """Manages scheduled download jobs with persistent storage and background execution."""
 
-    def __init__(self, file_path=SCHEDULES_FILE, runner_callback=None):
+    def __init__(self, file_path=SCHEDULES_FILE, runner_callback=None, is_busy_check=None):
         self.file_path = file_path
         self.runner_callback = runner_callback  # function(job) -> None
+        self.is_busy_check = is_busy_check  # function() -> bool
         self._is_busy = False
         self._running = True
         self._ensure_file()
@@ -133,7 +134,7 @@ class DownloadScheduler:
             now = datetime.now()
             diff = target - now
             if diff.total_seconds() <= 0:
-                return "Due now"
+                return "Starting now..."
             total_sec = int(diff.total_seconds())
             hours, remainder = divmod(total_sec, 3600)
             minutes, seconds = divmod(remainder, 60)
@@ -151,12 +152,21 @@ class DownloadScheduler:
         """Set whether download engine is currently occupied."""
         self._is_busy = busy
 
-    def _loop(self):
-        """Background thread monitoring schedules."""
-        while self._running:
-            time.sleep(3)
+    def is_engine_busy(self):
+        """Check if download engine is currently active."""
+        if callable(self.is_busy_check):
             try:
-                if self._is_busy:
+                return bool(self.is_busy_check())
+            except Exception:
+                pass
+        return bool(self._is_busy)
+
+    def _loop(self):
+        """Background thread monitoring schedules (checking every second)."""
+        while self._running:
+            time.sleep(1)
+            try:
+                if self.is_engine_busy():
                     continue  # Wait until current download engine is free
 
                 now = datetime.now()
@@ -174,8 +184,8 @@ class DownloadScheduler:
                         continue
 
                     if now >= target:
-                        # Trigger this job
-                        self.mark_status(job["id"], "Running", "Started by scheduler")
+                        # Trigger this job immediately
+                        self.mark_status(job["id"], "Running", f"Started at {now.strftime('%H:%M:%S')}")
                         if self.runner_callback:
                             try:
                                 self.runner_callback(job)

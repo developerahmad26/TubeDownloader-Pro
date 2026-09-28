@@ -493,7 +493,7 @@ class SaveBatchDialog(ctk.CTkToplevel):
     def __init__(self, parent, batch_manager, default_data=None, on_saved=None):
         super().__init__(parent)
         self.title("💾 Save as Download Batch")
-        self.geometry("600x560")
+        self.geometry("620x620")
         self.resizable(False, False)
 
         self.parent = parent
@@ -523,62 +523,101 @@ class SaveBatchDialog(ctk.CTkToplevel):
             text="Save this channel, playlist, or video configuration as a reusable batch.",
             font=("Segoe UI", 12),
             text_color="gray",
-        ).pack(anchor="w", pady=(0, 15))
+        ).pack(anchor="w", pady=(0, 12))
 
         form = ctk.CTkFrame(container)
-        form.pack(fill="both", expand=True, pady=(0, 15), padx=5)
+        form.pack(fill="both", expand=True, pady=(0, 12), padx=4)
 
         # 1. Batch Name
-        ctk.CTkLabel(form, text="Batch Name:", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=8)
-        self.name_entry = ctk.CTkEntry(form, width=380, height=32)
+        ctk.CTkLabel(form, text="Batch Name:", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=6)
+        self.name_entry = ctk.CTkEntry(form, width=390, height=30)
         default_name = self.data.get("name") or self.data.get("subfolder") or "My Download Batch"
         self.name_entry.insert(0, default_name[:60])
-        self.name_entry.grid(row=0, column=1, sticky="w", padx=10, pady=8)
+        self.name_entry.grid(row=0, column=1, sticky="w", padx=10, pady=6)
 
         # 2. Type
-        ctk.CTkLabel(form, text="Type:", font=("Segoe UI", 12, "bold")).grid(row=1, column=0, sticky="w", padx=12, pady=8)
+        ctk.CTkLabel(form, text="Type:", font=("Segoe UI", 12, "bold")).grid(row=1, column=0, sticky="w", padx=12, pady=6)
         self.type_var = ctk.StringVar(value=self.data.get("type", "channel"))
-        ctk.CTkOptionMenu(form, variable=self.type_var, values=["single", "playlist", "channel"], width=180).grid(row=1, column=1, sticky="w", padx=10, pady=8)
+        ctk.CTkOptionMenu(form, variable=self.type_var, values=["single", "playlist", "channel"], width=180, height=28).grid(row=1, column=1, sticky="w", padx=10, pady=6)
 
         # 3. URL
-        ctk.CTkLabel(form, text="YouTube URL:", font=("Segoe UI", 12, "bold")).grid(row=2, column=0, sticky="w", padx=12, pady=8)
-        self.url_entry = ctk.CTkEntry(form, width=380, height=32)
+        ctk.CTkLabel(form, text="YouTube URL:", font=("Segoe UI", 12, "bold")).grid(row=2, column=0, sticky="w", padx=12, pady=6)
+        self.url_entry = ctk.CTkEntry(form, width=390, height=30)
         self.url_entry.insert(0, self.data.get("url", ""))
-        self.url_entry.grid(row=2, column=1, sticky="w", padx=10, pady=8)
+        self.url_entry.grid(row=2, column=1, sticky="w", padx=10, pady=6)
 
         # 4. Quality & Format
-        ctk.CTkLabel(form, text="Quality / Format:", font=("Segoe UI", 12, "bold")).grid(row=3, column=0, sticky="w", padx=12, pady=8)
+        ctk.CTkLabel(form, text="Quality / Format:", font=("Segoe UI", 12, "bold")).grid(row=3, column=0, sticky="w", padx=12, pady=6)
         qf_row = ctk.CTkFrame(form, fg_color="transparent")
-        qf_row.grid(row=3, column=1, sticky="w", padx=10, pady=8)
+        qf_row.grid(row=3, column=1, sticky="w", padx=10, pady=6)
 
         self.quality_var = ctk.StringVar(value=self.data.get("quality", "Best Quality"))
-        ctk.CTkOptionMenu(qf_row, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=200).pack(side="left")
+        ctk.CTkOptionMenu(qf_row, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=200, height=28).pack(side="left")
 
         self.format_var = ctk.StringVar(value=self.data.get("format", "mp4"))
-        ctk.CTkOptionMenu(qf_row, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90).pack(side="left", padx=8)
+        ctk.CTkOptionMenu(qf_row, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90, height=28).pack(side="left", padx=8)
 
-        # 5. Naming Scheme
-        ctk.CTkLabel(form, text="Naming Scheme:", font=("Segoe UI", 12, "bold")).grid(row=4, column=0, sticky="w", padx=12, pady=8)
-        self.naming_var = ctk.StringVar(value=self.data.get("naming_scheme", "Numbered + Rewrite Title (01 - Cleaned)"))
-        ctk.CTkOptionMenu(form, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=320).grid(row=4, column=1, sticky="w", padx=10, pady=8)
+        # 5. Naming Scheme (Reverse mapped to human label)
+        raw_naming = self.data.get("naming_scheme", "title")
+        display_naming = "Video Title"
+        for k, v in NAMING_SCHEMES.items():
+            if v == raw_naming or k == raw_naming:
+                display_naming = k
+                break
+
+        ctk.CTkLabel(form, text="Naming Scheme:", font=("Segoe UI", 12, "bold")).grid(row=4, column=0, sticky="w", padx=12, pady=6)
+        self.naming_var = ctk.StringVar(value=display_naming)
+        ctk.CTkOptionMenu(form, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=330, height=28).grid(row=4, column=1, sticky="w", padx=10, pady=6)
 
         # 6. Custom Prefix
-        ctk.CTkLabel(form, text="Custom Prefix:", font=("Segoe UI", 12, "bold")).grid(row=5, column=0, sticky="w", padx=12, pady=8)
-        self.prefix_entry = ctk.CTkEntry(form, width=220, height=32)
+        ctk.CTkLabel(form, text="Custom Prefix:", font=("Segoe UI", 12, "bold")).grid(row=5, column=0, sticky="w", padx=12, pady=6)
+        self.prefix_entry = ctk.CTkEntry(form, width=220, height=30)
         self.prefix_entry.insert(0, self.data.get("custom_prefix", ""))
-        self.prefix_entry.grid(row=5, column=1, sticky="w", padx=10, pady=8)
+        self.prefix_entry.grid(row=5, column=1, sticky="w", padx=10, pady=6)
 
-        # 7. Selection Range
-        ctk.CTkLabel(form, text="Range / Selection:", font=("Segoe UI", 12, "bold")).grid(row=6, column=0, sticky="w", padx=12, pady=8)
+        # 7. Selection Range (Reverse mapped to human label)
+        raw_sel = self.data.get("selection_mode", "all")
+        display_sel = "All Videos"
+        for k, v in SELECTION_MODES.items():
+            if v == raw_sel or k == raw_sel:
+                display_sel = k
+                break
+
+        ctk.CTkLabel(form, text="Range / Selection:", font=("Segoe UI", 12, "bold")).grid(row=6, column=0, sticky="w", padx=12, pady=6)
         sel_row = ctk.CTkFrame(form, fg_color="transparent")
-        sel_row.grid(row=6, column=1, sticky="w", padx=10, pady=8)
+        sel_row.grid(row=6, column=1, sticky="w", padx=10, pady=6)
 
-        self.sel_var = ctk.StringVar(value=self.data.get("selection_mode", "All Videos"))
-        ctk.CTkOptionMenu(sel_row, variable=self.sel_var, values=list(SELECTION_MODES.keys()), width=160).pack(side="left")
+        self.sel_var = ctk.StringVar(value=display_sel)
+        ctk.CTkOptionMenu(sel_row, variable=self.sel_var, values=list(SELECTION_MODES.keys()), width=160, height=28).pack(side="left")
 
-        self.sel_val_entry = ctk.CTkEntry(sel_row, width=120, height=32, placeholder_text="e.g. 1-50")
+        self.sel_val_entry = ctk.CTkEntry(sel_row, width=120, height=28, placeholder_text="e.g. 1-50")
         self.sel_val_entry.insert(0, self.data.get("selection_value", ""))
         self.sel_val_entry.pack(side="left", padx=8)
+
+        # 8. Download Directory
+        ctk.CTkLabel(form, text="Download Folder:", font=("Segoe UI", 12, "bold")).grid(row=7, column=0, sticky="w", padx=12, pady=6)
+        dir_row = ctk.CTkFrame(form, fg_color="transparent")
+        dir_row.grid(row=7, column=1, sticky="w", padx=10, pady=6)
+
+        self.dir_entry = ctk.CTkEntry(dir_row, width=285, height=28)
+        self.dir_entry.insert(0, self.data.get("download_dir", DEFAULT_DOWNLOAD_DIR))
+        self.dir_entry.pack(side="left")
+
+        def _browse_dir():
+            chosen = filedialog.askdirectory(initialdir=self.dir_entry.get())
+            if chosen:
+                self.dir_entry.delete(0, "end")
+                self.dir_entry.insert(0, chosen)
+
+        ctk.CTkButton(dir_row, text="📁 Browse", width=75, height=28, command=_browse_dir).pack(side="left", padx=6)
+
+        # 9. Extra checkboxes
+        cb_row = ctk.CTkFrame(form, fg_color="transparent")
+        cb_row.grid(row=8, column=1, sticky="w", padx=10, pady=6)
+        self.thumb_var = ctk.BooleanVar(value=bool(self.data.get("embed_thumbnail", False)))
+        ctk.CTkCheckBox(cb_row, text="Embed Thumbnail", variable=self.thumb_var).pack(side="left", padx=(0, 15))
+        self.sub_var = ctk.BooleanVar(value=bool(self.data.get("download_subtitles", False)))
+        ctk.CTkCheckBox(cb_row, text="Download Subtitles", variable=self.sub_var).pack(side="left")
 
         # Buttons
         btn_box = ctk.CTkFrame(container, fg_color="transparent")
@@ -588,10 +627,11 @@ class SaveBatchDialog(ctk.CTkToplevel):
             btn_box,
             text="💾 Save Batch",
             font=("Segoe UI", 13, "bold"),
-            fg_color="#28a745",
-            hover_color="#218838",
+            fg_color="#059669",
+            hover_color="#10b981",
             width=180,
             height=38,
+            corner_radius=6,
             command=self._confirm,
         ).pack(side="left")
 
@@ -599,10 +639,11 @@ class SaveBatchDialog(ctk.CTkToplevel):
             btn_box,
             text="Cancel",
             font=("Segoe UI", 12),
-            fg_color="#343a40",
-            hover_color="#23272b",
+            fg_color="#334155",
+            hover_color="#475569",
             width=100,
             height=38,
+            corner_radius=6,
             command=self.destroy,
         ).pack(side="right")
 
@@ -619,6 +660,8 @@ class SaveBatchDialog(ctk.CTkToplevel):
         sel_key = self.sel_var.get()
         sel_mode = SELECTION_MODES.get(sel_key, "all")
 
+        chosen_dir = self.dir_entry.get().strip() or DEFAULT_DOWNLOAD_DIR
+
         opts = {
             "quality": self.quality_var.get(),
             "output_format": self.format_var.get(),
@@ -626,11 +669,12 @@ class SaveBatchDialog(ctk.CTkToplevel):
             "custom_prefix": self.prefix_entry.get().strip(),
             "selection_mode": sel_mode,
             "selection_value": self.sel_val_entry.get().strip(),
-            "download_dir": self.data.get("download_dir", DEFAULT_DOWNLOAD_DIR),
+            "download_dir": chosen_dir,
             "subfolder": self.data.get("subfolder", ""),
-            "embed_thumbnail": self.data.get("embed_thumbnail", False),
-            "download_subtitles": self.data.get("download_subtitles", False),
+            "embed_thumbnail": self.thumb_var.get(),
+            "download_subtitles": self.sub_var.get(),
             "subtitle_lang": self.data.get("subtitle_lang", "en"),
+            "speed_limit": self.data.get("speed_limit", None),
         }
 
         batch_id = self.data.get("id")

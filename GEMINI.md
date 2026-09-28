@@ -1,4 +1,4 @@
-# Project Rules: YouTube Video Downloader
+# Project Rules: TubeDownloader Pro
 
 ## 🔄 Automatic Git Synchronization & Push Rule
 - **Mandatory Policy**: Whenever ANY change is made to this codebase (code edit, bug fix, feature addition, config update, or documentation), you MUST automatically stage, commit, and push the changes to GitHub (`origin main`) immediately.
