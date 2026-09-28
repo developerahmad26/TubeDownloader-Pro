@@ -869,7 +869,7 @@ class App(ctk.CTk):
     def _open_cookie_manager(self):
         top = ctk.CTkToplevel(self)
         top.title("🍪 YouTube Cookies Manager (Fix Bot & 403 Errors)")
-        top.geometry("660x570")
+        top.geometry("720x620")
         top.transient(self)
         top.grab_set()
 
@@ -880,19 +880,21 @@ class App(ctk.CTk):
 
         info_msg = (
             "YouTube datacenter / VPS IP addresses par automated bot check lagata hai.\n"
-            "Apne computer ke browser se YouTube cookies yahan paste karne se bot error 100% solve ho jata hai!\n\n"
-            "⚠️ Dhyan dein: Rumble uploader ke cookies alag hote hain! YouTube ke liye youtube.com ke cookies hone chahiye.\n\n"
-            "Kaise Karein:\n"
-            "1. Apne browser me 'Get cookies.txt LOCALLY' extension install karein.\n"
-            "2. youtube.com open karein aur extension se cookies Copy karein.\n"
-            "3. Yahan box me paste karein aur 'Save Cookies' dabayein."
+            "Apne computer ke browser se YouTube cookies yahan paste karne se bot error 100% bypass ho jata hai!\n\n"
+            "⭐ ZAROORI (Cookies Expire / Rotate Hone Se Kaise Bachayein):\n"
+            "Google normal browser tab ke cookies ko kuch hi der me ROTATE (expire) kar deta hai.\n"
+            "Isliye:\n"
+            "1. Browser me 'Incognito / Private Window' open karein aur youtube.com login karein.\n"
+            "2. 'Get cookies.txt LOCALLY' extension se cookies Copy karein.\n"
+            "3. Yahan '📋 Paste Clipboard' dabayein aur '💾 Save Cookies' karein.\n"
+            "4. Export ke baad us Incognito window ko close kar dein (taaki session tokens rotate na hon)."
         )
         ctk.CTkLabel(
             top, text=info_msg, font=("Segoe UI", 11),
-            text_color="#cccccc", justify="left", wraplength=620
+            text_color="#cccccc", justify="left", wraplength=680
         ).pack(padx=20, pady=(0, 10))
 
-        text_box = ctk.CTkTextbox(top, width=620, height=220, font=("Consolas", 11))
+        text_box = ctk.CTkTextbox(top, width=680, height=210, font=("Consolas", 11))
         text_box.pack(padx=20, pady=5)
         self._attach_textbox_context_menu(text_box)
 
@@ -920,6 +922,64 @@ class App(ctk.CTk):
                     "Clipboard is empty or could not be read.\n"
                     "Please copy your YouTube cookies to clipboard first."
                 )
+
+        def extract_from_browser():
+            dlg = ctk.CTkToplevel(top)
+            dlg.title("Select Browser")
+            dlg.geometry("380x210")
+            dlg.transient(top)
+            dlg.grab_set()
+
+            ctk.CTkLabel(
+                dlg, text="Choose browser with active YouTube login:",
+                font=("Segoe UI", 12, "bold")
+            ).pack(padx=15, pady=(15, 10))
+
+            b_var = ctk.StringVar(value="chrome")
+            ctk.CTkOptionMenu(
+                dlg, variable=b_var,
+                values=["chrome", "firefox", "edge", "brave", "chromium"],
+                width=200
+            ).pack(pady=5)
+
+            def do_extract():
+                selected_browser = b_var.get()
+                dlg.destroy()
+                try:
+                    self._update_status(f"🌐 Extracting cookies from {selected_browser}...")
+                    import yt_dlp.cookies
+                    import tempfile
+                    jar = yt_dlp.cookies.extract_cookies_from_browser(selected_browser)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.txt', mode='w') as tf:
+                        temp_p = tf.name
+                    jar.save(temp_p, ignore_discard=True, ignore_expires=True)
+                    with open(temp_p, 'r', encoding='utf-8', errors='ignore') as f:
+                        data = f.read()
+                    try:
+                        os.remove(temp_p)
+                    except Exception:
+                        pass
+                    if 'youtube.com' in data or '.youtube.com' in data:
+                        text_box.delete("1.0", "end")
+                        text_box.insert("1.0", data)
+                        save_cookies()
+                    else:
+                        messagebox.showwarning(
+                            "No YouTube Cookies",
+                            f"{selected_browser.title()} me YouTube cookies nahi mile.\n"
+                            f"Kripya us browser me pehle youtube.com par login karein."
+                        )
+                except Exception as ex:
+                    messagebox.showerror(
+                        "Browser Cookie Error",
+                        f"{selected_browser.title()} se cookies read nahi ho paayi.\n\n"
+                        f"Agar browser open hai toh use band karke try karein, ya '📋 Paste Clipboard' use karein.\n\nDetails: {ex}"
+                    )
+
+            ctk.CTkButton(
+                dlg, text="Extract & Save", command=do_extract,
+                fg_color="#2ECC71", hover_color="#27AE60"
+            ).pack(pady=15)
 
         def browse_file():
             fn = filedialog.askopenfilename(
@@ -980,7 +1040,11 @@ class App(ctk.CTk):
         ).pack(side="left", padx=5)
 
         ctk.CTkButton(
-            btn_frame, text="📁 Browse File", width=120, command=browse_file
+            btn_frame, text="🌐 From Browser", width=120, command=extract_from_browser
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            btn_frame, text="📁 Browse File", width=110, command=browse_file
         ).pack(side="left", padx=5)
 
         ctk.CTkButton(

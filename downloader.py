@@ -59,8 +59,18 @@ class ErrorCaptureLogger:
         self.errors.append(str(msg))
 
     def get_last_error(self):
+        # 1. Check for cookie rotation warning (Google session invalidation)
+        for w in reversed(self.warnings):
+            w_lower = w.lower()
+            if any(t in w_lower for t in ['rotated in the browser', 'no longer valid', 'cookies are no longer valid']):
+                return "YouTube Cookies Expired/Rotated! (Export fresh cookies via Incognito window)"
+
         if not self.errors:
+            for w in reversed(self.warnings):
+                if 'bot' in w.lower() or 'sign in' in w.lower():
+                    return "Bot Check Triggered! (Fresh YouTube Cookies required)"
             return ""
+
         err = self.errors[-1]
         # Strip ANSI escape codes (e.g. [0;31m)
         err = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', err)
@@ -719,8 +729,14 @@ class DownloadManager:
                                 status_callback(f"[{idx}/{self.total_videos}] ⚡ Already exists: {video_title}")
                     else:
                         last_err = logger.get_last_error() or f"Code {result}"
-                        if "bot" in last_err.lower() or "sign in" in last_err.lower():
-                            display_err = "Bot Check Triggered! (Add YouTube Cookies via button above)"
+                        has_cookie = self.find_cookie_file() is not None
+                        if "rotated" in last_err.lower() or "no longer valid" in last_err.lower():
+                            display_err = "Cookies Expired/Rotated by Google! (Export fresh cookies from Incognito tab)"
+                        elif "bot" in last_err.lower() or "sign in" in last_err.lower():
+                            if has_cookie:
+                                display_err = "Cookies Expired/Rejected by YouTube! (Export fresh cookies from Incognito tab)"
+                            else:
+                                display_err = "Bot Check Triggered! (Add YouTube Cookies via button above)"
                         else:
                             display_err = last_err
                         self.failed_videos.append({
