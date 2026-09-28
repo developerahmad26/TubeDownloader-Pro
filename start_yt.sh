@@ -24,11 +24,18 @@ git remote set-url origin https://github.com/developerahmad26/TubeDownloader-Pro
 git stash --quiet 2>/dev/null || true
 git fetch origin main --quiet 2>/dev/null && git reset --hard origin/main --quiet 2>/dev/null || true
 
-# 2. Check and ensure system Tkinter and venv packages are installed
+# Auto-patch Desktop shortcut to Terminal=false so "failed to execute default terminal" error never happens
+for DESK in "$HOME/Desktop" "/root/Desktop"; do
+    if [ -f "$DESK/TubeDownloader_Pro.desktop" ]; then
+        sed -i 's/Terminal=true/Terminal=false/g' "$DESK/TubeDownloader_Pro.desktop" 2>/dev/null || true
+    fi
+done
+
+# 2. Check and ensure system Tkinter, venv, and terminal packages are installed
 if ! python3 -c "import tkinter" 2>/dev/null; then
     echo "[!] Tkinter not found! Installing system GUI packages (python3-tk, python3-venv)..."
     $SUDO apt-get update -y 2>/dev/null || true
-    $SUDO apt-get install -y python3-tk python3-venv python3-pip ffmpeg 2>/dev/null || true
+    $SUDO apt-get install -y python3-tk python3-venv python3-pip ffmpeg xterm xfce4-terminal 2>/dev/null || true
 fi
 
 # 3. Ensure dedicated virtual environment exists

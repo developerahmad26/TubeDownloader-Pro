@@ -17,10 +17,10 @@ if [ "$EUID" -ne 0 ] && which sudo >/dev/null 2>&1; then
     SUDO="sudo"
 fi
 
-# 1. Ensure required system packages (Tkinter for GUI, FFmpeg, venv, Node.js, xclip for clipboard, unzip)
+# 1. Ensure required system packages (Tkinter for GUI, FFmpeg, venv, Node.js, xclip for clipboard, unzip, terminal)
 echo "[*] Checking system dependencies..."
 $SUDO apt-get update -y || true
-$SUDO apt-get install -y python3-tk python3-venv python3-pip ffmpeg nodejs xclip unzip || true
+$SUDO apt-get install -y python3-tk python3-venv python3-pip ffmpeg nodejs xclip unzip xterm xfce4-terminal || true
 
 # 2. Create isolated Python virtual environment (No conflict with other apps)
 if [ ! -d "$DIR/venv" ]; then
@@ -47,34 +47,31 @@ git remote set-url origin https://github.com/developerahmad26/TubeDownloader-Pro
 # 4. Make all scripts executable
 chmod +x "$DIR"/*.sh 2>/dev/null || true
 
-# 5. Create Desktop Shortcut on RDP Desktop
-DESKTOP_DIR="$HOME/Desktop"
-if [ ! -d "$DESKTOP_DIR" ] && [ -d "/root/Desktop" ]; then
-    DESKTOP_DIR="/root/Desktop"
-fi
-mkdir -p "$DESKTOP_DIR"
-
+# 5. Create Desktop Shortcut on RDP Desktop (Terminal=false so no terminal emulator is required)
 ICON_PATH="$DIR/assets/icon.png"
 [ ! -f "$ICON_PATH" ] && ICON_PATH="video-x-generic"
 
-cat <<EOF > "$DESKTOP_DIR/TubeDownloader_Pro.desktop"
+for DESKTOP_DIR in "$HOME/Desktop" "/root/Desktop"; do
+    if [ -d "$DESKTOP_DIR" ] || [ "$DESKTOP_DIR" = "$HOME/Desktop" ]; then
+        mkdir -p "$DESKTOP_DIR"
+        cat <<EOF > "$DESKTOP_DIR/TubeDownloader_Pro.desktop"
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=TubeDownloader Pro
 Comment=Download YouTube Channel / Playlist / Single Videos
-Exec=bash -c "cd '$DIR' && ./start.sh"
+Path=$DIR
+Exec=/bin/bash "$DIR/start.sh"
 Icon=$ICON_PATH
-Terminal=true
+Terminal=false
 StartupNotify=true
 Categories=AudioVideo;Network;
 EOF
-
-chmod +x "$DESKTOP_DIR/TubeDownloader_Pro.desktop"
-which gio >/dev/null 2>&1 && gio set "$DESKTOP_DIR/TubeDownloader_Pro.desktop" metadata::trusted true 2>/dev/null || true
-
-# Clean up old legacy shortcuts if present
-rm -f "$DESKTOP_DIR/YT_Downloader.desktop" 2>/dev/null || true
+        chmod +x "$DESKTOP_DIR/TubeDownloader_Pro.desktop"
+        which gio >/dev/null 2>&1 && gio set "$DESKTOP_DIR/TubeDownloader_Pro.desktop" metadata::trusted true 2>/dev/null || true
+        rm -f "$DESKTOP_DIR/YT_Downloader.desktop" 2>/dev/null || true
+    fi
+done
 
 echo "=========================================================="
 echo " [OK] TubeDownloader Pro is ready on your RDP Desktop!"
