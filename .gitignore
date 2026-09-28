@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Media and video downloads
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.mov
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.opus
+*.part
+*.ytdl
+*.temp
+*.tmp
+test_*/
+
+# Authentication & sensitive files
+cookies.txt
+*.cookie
+.env
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS generated
+Thumbs.db
+Desktop.ini
+.DS_Store
