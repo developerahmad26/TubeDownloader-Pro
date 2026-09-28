@@ -157,7 +157,7 @@ class DownloadManager:
             'lazy_playlist': False,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios'],
+                    'player_client': ['android'],
                 }
             },
         }
@@ -173,7 +173,7 @@ class DownloadManager:
 
         if cookie_path:
             ydl_opts['cookiefile'] = cookie_path
-            ydl_opts['extractor_args']['youtube']['player_client'] = ['web', 'android', 'ios']
+            ydl_opts['extractor_args']['youtube']['player_client'] = ['web', 'android']
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -338,7 +338,7 @@ class DownloadManager:
             'windowsfilenames': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios'],
+                    'player_client': ['android'],
                 }
             },
         }
@@ -364,7 +364,7 @@ class DownloadManager:
 
         if cookie_path:
             opts['cookiefile'] = cookie_path
-            opts['extractor_args']['youtube']['player_client'] = ['web', 'android', 'ios']
+            opts['extractor_args']['youtube']['player_client'] = ['web', 'android']
 
         postprocessors = []
 
