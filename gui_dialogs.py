@@ -19,10 +19,19 @@ from title_rewriter import load_rules, rewrite_title, save_rules
 class TitleRulesDialog(ctk.CTkToplevel):
     """Dialog for customizing Title Rewriting rules with live preview."""
 
+    MODE_LABELS = {
+        "✨ Smart Rephrase & Restructure (Real Rewriting)": "smart_rephrase",
+        "💥 Add Dramatic Hook (MUST WATCH, SHOCKING)": "hook",
+        "🔄 Reverse / Reorder Clauses": "reorder",
+        "🤖 AI Rephrase (Google Gemini API)": "ai_gemini",
+        "🧹 Clean Only (No Wording Changes)": "clean_only",
+    }
+    MODE_KEYS = {v: k for k, v in MODE_LABELS.items()}
+
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("⚙️ Title Rewrite Rules & Live Preview")
-        self.geometry("640x580")
+        self.title("⚙️ Title Rewriting Engine & Live Preview")
+        self.geometry("680x640")
         self.resizable(False, False)
         self.rules = load_rules()
         self.parent = parent
@@ -40,20 +49,54 @@ class TitleRulesDialog(ctk.CTkToplevel):
         # Header
         ctk.CTkLabel(
             container,
-            text="⚙️ Title Rewrite Rules",
+            text="⚙️ Title Rewriting Engine",
             font=("Segoe UI", 18, "bold"),
         ).pack(anchor="w", pady=(0, 2))
 
         ctk.CTkLabel(
             container,
-            text="Configure how video titles are cleaned and formatted automatically.",
+            text="Choose how video titles are rephrased, transformed, and organized.",
             font=("Segoe UI", 12),
             text_color="gray",
-        ).pack(anchor="w", pady=(0, 15))
+        ).pack(anchor="w", pady=(0, 12))
 
-        # Checkboxes Frame
+        # 1. Rewrite Mode Selection Box
+        mode_box = ctk.CTkFrame(container)
+        mode_box.pack(fill="x", pady=(0, 12))
+
+        ctk.CTkLabel(mode_box, text="Rewrite Style / Engine:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(10, 4))
+        current_mode_key = self.rules.get("rewrite_mode", "smart_rephrase")
+        default_label = self.MODE_KEYS.get(current_mode_key, "✨ Smart Rephrase & Restructure (Real Rewriting)")
+
+        self.mode_var = ctk.StringVar(value=default_label)
+        self.mode_menu = ctk.CTkOptionMenu(
+            mode_box,
+            variable=self.mode_var,
+            values=list(self.MODE_LABELS.keys()),
+            width=400,
+            command=self._on_mode_change,
+        )
+        self.mode_menu.pack(anchor="w", padx=15, pady=(0, 10))
+
+        # Gemini API Key Entry (Collapsible)
+        self.ai_key_frame = ctk.CTkFrame(mode_box, fg_color="transparent")
+        ctk.CTkLabel(self.ai_key_frame, text="Gemini API Key (Free from aistudio.google.com):", font=("Segoe UI", 11), text_color="#17a2b8").pack(anchor="w", padx=15)
+        self.ai_key_entry = ctk.CTkEntry(self.ai_key_frame, width=420, placeholder_text="AIzaSy...", show="*")
+        self.ai_key_entry.insert(0, self.rules.get("gemini_api_key", ""))
+        self.ai_key_entry.pack(anchor="w", padx=15, pady=(2, 8))
+        self.ai_key_entry.bind("<KeyRelease>", lambda e: self._update_preview())
+
+        if current_mode_key == "ai_gemini":
+            self.ai_key_frame.pack(fill="x")
+
+        # 2. Cleaning Flags Frame
         opts_frame = ctk.CTkFrame(container)
-        opts_frame.pack(fill="x", pady=(0, 15))
+        opts_frame.pack(fill="x", pady=(0, 12))
+
+        ctk.CTkLabel(opts_frame, text="Pre-Cleaning Options:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(8, 2))
+
+        chk_grid = ctk.CTkFrame(opts_frame, fg_color="transparent")
+        chk_grid.pack(fill="x", padx=10, pady=(0, 8))
 
         self.emoji_var = ctk.BooleanVar(value=self.rules.get("remove_emojis", True))
         self.hashtag_var = ctk.BooleanVar(value=self.rules.get("remove_hashtags", True))
@@ -61,72 +104,37 @@ class TitleRulesDialog(ctk.CTkToplevel):
         self.tags_var = ctk.BooleanVar(value=self.rules.get("remove_resolution_tags", True))
         self.sep_var = ctk.BooleanVar(value=self.rules.get("clean_separators", True))
 
-        ctk.CTkCheckBox(
-            opts_frame,
-            text="🔥 Remove Emojis & Graphic Icons (😱, 🔥, 🚀, etc.)",
-            variable=self.emoji_var,
-            command=self._update_preview,
-        ).pack(anchor="w", padx=15, pady=8)
+        ctk.CTkCheckBox(chk_grid, text="Remove Emojis (😱, 🔥, etc.)", variable=self.emoji_var, command=self._update_preview).grid(row=0, column=0, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Hashtags (#shorts, #vlog)", variable=self.hashtag_var, command=self._update_preview).grid(row=0, column=1, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Mentions (@channel)", variable=self.mention_var, command=self._update_preview).grid(row=1, column=0, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Tags ([1080p], Official)", variable=self.tags_var, command=self._update_preview).grid(row=1, column=1, sticky="w", padx=10, pady=4)
 
-        ctk.CTkCheckBox(
-            opts_frame,
-            text="🏷️ Remove Hashtags (#shorts, #vlog, #viral, etc.)",
-            variable=self.hashtag_var,
-            command=self._update_preview,
-        ).pack(anchor="w", padx=15, pady=8)
-
-        ctk.CTkCheckBox(
-            opts_frame,
-            text="👤 Remove Channel Mentions (@channel, @user)",
-            variable=self.mention_var,
-            command=self._update_preview,
-        ).pack(anchor="w", padx=15, pady=8)
-
-        ctk.CTkCheckBox(
-            opts_frame,
-            text="🎬 Remove Video/Media Tags ([1080p], (Official Video), (4K), etc.)",
-            variable=self.tags_var,
-            command=self._update_preview,
-        ).pack(anchor="w", padx=15, pady=8)
-
-        ctk.CTkCheckBox(
-            opts_frame,
-            text="➖ Normalize Separators (convert |, //, __ to clean hyphen -)",
-            variable=self.sep_var,
-            command=self._update_preview,
-        ).pack(anchor="w", padx=15, pady=8)
-
-        # Live Test & Preview Frame
+        # 3. Live Test & Preview Frame
         prev_frame = ctk.CTkFrame(container)
-        prev_frame.pack(fill="x", pady=(0, 15))
+        prev_frame.pack(fill="x", pady=(0, 12))
 
-        ctk.CTkLabel(
-            prev_frame,
-            text="🧪 Live Title Preview:",
-            font=("Segoe UI", 13, "bold"),
-        ).pack(anchor="w", padx=15, pady=(10, 5))
-
-        ctk.CTkLabel(prev_frame, text="Input dirty title:", font=("Segoe UI", 11), text_color="gray").pack(anchor="w", padx=15)
+        ctk.CTkLabel(prev_frame, text="🧪 Live Title Rewriting Preview:", font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=15, pady=(10, 4))
+        ctk.CTkLabel(prev_frame, text="Test Title:", font=("Segoe UI", 11), text_color="gray").pack(anchor="w", padx=15)
         self.test_entry = ctk.CTkEntry(prev_frame, height=32, font=("Segoe UI", 12))
-        self.test_entry.insert(0, "Aaj सुबह सुबह Ye Kya Ho Gaya | Vlog #12 #shorts #viral @shiv [1080p] 😱")
-        self.test_entry.pack(fill="x", padx=15, pady=(2, 8))
+        self.test_entry.insert(0, "Aaj सुबह सुबह Ye Kya Ho Gaya | Vlog #12 #shorts @shiv [1080p] 😱")
+        self.test_entry.pack(fill="x", padx=15, pady=(2, 6))
         self.test_entry.bind("<KeyRelease>", lambda e: self._update_preview())
 
-        ctk.CTkLabel(prev_frame, text="Rewritten result:", font=("Segoe UI", 11), text_color="#2ECC71").pack(anchor="w", padx=15)
+        ctk.CTkLabel(prev_frame, text="Rewritten Output:", font=("Segoe UI", 11), text_color="#2ECC71").pack(anchor="w", padx=15)
         self.result_label = ctk.CTkLabel(
             prev_frame,
             text="",
             font=("Segoe UI", 13, "bold"),
             text_color="#3498DB",
             anchor="w",
-            wraplength=580,
+            wraplength=620,
             justify="left",
         )
-        self.result_label.pack(fill="x", padx=15, pady=(2, 12))
+        self.result_label.pack(fill="x", padx=15, pady=(2, 10))
 
         # Bottom buttons
         btn_frame = ctk.CTkFrame(container, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=(5, 0))
+        btn_frame.pack(fill="x")
 
         ctk.CTkButton(
             btn_frame,
@@ -163,8 +171,20 @@ class TitleRulesDialog(ctk.CTkToplevel):
 
         self._update_preview()
 
+    def _on_mode_change(self, val):
+        mode_code = self.MODE_LABELS.get(val, "smart_rephrase")
+        if mode_code == "ai_gemini":
+            self.ai_key_frame.pack(fill="x")
+        else:
+            self.ai_key_frame.pack_forget()
+        self._update_preview()
+
     def _get_current_rules(self):
+        mode_code = self.MODE_LABELS.get(self.mode_var.get(), "smart_rephrase")
         return {
+            "rewrite_mode": mode_code,
+            "hook_style": "Dramatic Hook",
+            "gemini_api_key": self.ai_key_entry.get().strip(),
             "remove_emojis": self.emoji_var.get(),
             "remove_hashtags": self.hashtag_var.get(),
             "remove_mentions": self.mention_var.get(),
@@ -180,12 +200,13 @@ class TitleRulesDialog(ctk.CTkToplevel):
         self.result_label.configure(text=f"👉  {clean}")
 
     def _reset_defaults(self):
+        self.mode_var.set("✨ Smart Rephrase & Restructure (Real Rewriting)")
         self.emoji_var.set(True)
         self.hashtag_var.set(True)
         self.mention_var.set(True)
         self.tags_var.set(True)
         self.sep_var.set(True)
-        self._update_preview()
+        self._on_mode_change(self.mode_var.get())
 
     def _save(self):
         new_rules = self._get_current_rules()
@@ -196,12 +217,12 @@ class TitleRulesDialog(ctk.CTkToplevel):
 
 
 class ScheduleDialog(ctk.CTkToplevel):
-    """Dialog for scheduling single, batch, playlist, or channel downloads."""
+    """Easy and robust scheduling dialog with direct time spinners, quick presets, and live countdown."""
 
     def __init__(self, parent, scheduler, target_name="", target_type="direct", target_data=None, on_scheduled=None):
         super().__init__(parent)
         self.title("⏰ Schedule Download")
-        self.geometry("560x520")
+        self.geometry("600x560")
         self.resizable(False, False)
 
         self.parent = parent
@@ -219,97 +240,106 @@ class ScheduleDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         container = ctk.CTkFrame(self, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=20, pady=15)
+        container.pack(fill="both", expand=True, padx=22, pady=16)
 
         # Header
-        ctk.CTkLabel(
-            container,
-            text="⏰ Schedule Download",
-            font=("Segoe UI", 18, "bold"),
-        ).pack(anchor="w", pady=(0, 2))
+        ctk.CTkLabel(container, text="⏰ Schedule Download", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 2))
+        ctk.CTkLabel(container, text=f"Target: {self.target_name or 'Current Download'}", font=("Segoe UI", 12), text_color="#3498DB").pack(anchor="w", pady=(0, 12))
 
-        ctk.CTkLabel(
-            container,
-            text=f"Target: {self.target_name or 'Current Download'}",
-            font=("Segoe UI", 12),
-            text_color="#3498DB",
-        ).pack(anchor="w", pady=(0, 15))
-
-        # Schedule Name
-        ctk.CTkLabel(container, text="Task Name / Label:", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 4))
-        self.name_entry = ctk.CTkEntry(container, height=34, font=("Segoe UI", 12))
+        # Task Name
+        ctk.CTkLabel(container, text="Task Label / Name:", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 2))
+        self.name_entry = ctk.CTkEntry(container, height=32, font=("Segoe UI", 12))
         default_label = f"Schedule - {self.target_name}" if self.target_name else "Scheduled Download"
         self.name_entry.insert(0, default_label[:50])
-        self.name_entry.pack(fill="x", pady=(0, 15))
+        self.name_entry.pack(fill="x", pady=(0, 12))
 
-        # Quick Presets Frame
-        presets_box = ctk.CTkFrame(container)
-        presets_box.pack(fill="x", pady=(0, 15))
+        # Quick 1-Click Presets Box
+        presets_frame = ctk.CTkFrame(container)
+        presets_frame.pack(fill="x", pady=(0, 12))
 
-        ctk.CTkLabel(presets_box, text="⚡ Quick Presets:", font=("Segoe UI", 11, "bold"), text_color="gray").pack(anchor="w", padx=12, pady=(8, 4))
-        btn_row = ctk.CTkFrame(presets_box, fg_color="transparent")
-        btn_row.pack(fill="x", padx=10, pady=(0, 10))
+        ctk.CTkLabel(presets_frame, text="⚡ Quick 1-Click Presets:", font=("Segoe UI", 11, "bold"), text_color="#17a2b8").pack(anchor="w", padx=12, pady=(6, 4))
+        p_row1 = ctk.CTkFrame(presets_frame, fg_color="transparent")
+        p_row1.pack(fill="x", padx=8, pady=(0, 4))
 
-        ctk.CTkButton(
-            btn_row, text="+15 Mins", width=80, height=28,
-            command=lambda: self._set_preset(minutes=15)
-        ).pack(side="left", padx=4)
+        ctk.CTkButton(p_row1, text="+15 Mins", width=75, height=26, command=lambda: self._add_offset(minutes=15)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+30 Mins", width=75, height=26, command=lambda: self._add_offset(minutes=30)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+1 Hour", width=75, height=26, command=lambda: self._add_offset(hours=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+2 Hours", width=75, height=26, command=lambda: self._add_offset(hours=2)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+6 Hours", width=75, height=26, command=lambda: self._add_offset(hours=6)).pack(side="left", padx=3)
 
-        ctk.CTkButton(
-            btn_row, text="+1 Hour", width=80, height=28,
-            command=lambda: self._set_preset(hours=1)
-        ).pack(side="left", padx=4)
+        p_row2 = ctk.CTkFrame(presets_frame, fg_color="transparent")
+        p_row2.pack(fill="x", padx=8, pady=(0, 8))
 
-        ctk.CTkButton(
-            btn_row, text="Tonight 23:00", width=105, height=28,
-            command=lambda: self._set_specific_time(23, 0)
-        ).pack(side="left", padx=4)
+        ctk.CTkButton(p_row2, text="Tonight 23:00 (11 PM)", width=135, height=26, command=lambda: self._set_clock(23, 0, days=0)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Midnight 00:00", width=110, height=26, command=lambda: self._set_clock(0, 0, days=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Tomorrow 02:00 AM", width=135, height=26, command=lambda: self._set_clock(2, 0, days=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Tomorrow 06:00 AM", width=135, height=26, command=lambda: self._set_clock(6, 0, days=1)).pack(side="left", padx=3)
 
-        ctk.CTkButton(
-            btn_row, text="Tomorrow 02:00 AM", width=135, height=28,
-            command=lambda: self._set_specific_time(2, 0, days=1)
-        ).pack(side="left", padx=4)
+        # Time & Date Spinner Box
+        picker_box = ctk.CTkFrame(container)
+        picker_box.pack(fill="x", pady=(0, 12))
 
-        # Date & Time Pickers
-        dt_frame = ctk.CTkFrame(container)
-        dt_frame.pack(fill="x", pady=(0, 15))
+        # Row: Date buttons & entry
+        d_row = ctk.CTkFrame(picker_box, fg_color="transparent")
+        d_row.pack(fill="x", padx=12, pady=(10, 6))
 
-        # Row 1: Date
-        ctk.CTkLabel(dt_frame, text="Date (YYYY-MM-DD):", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
-        self.date_entry = ctk.CTkEntry(dt_frame, width=160, height=32)
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        self.date_entry.insert(0, today_str)
-        self.date_entry.grid(row=0, column=1, sticky="w", padx=10, pady=(12, 6))
+        ctk.CTkLabel(d_row, text="Date:", font=("Segoe UI", 12, "bold"), width=50).pack(side="left")
+        ctk.CTkButton(d_row, text="Today", width=65, height=28, command=self._set_today).pack(side="left", padx=3)
+        ctk.CTkButton(d_row, text="Tomorrow", width=75, height=28, command=self._set_tomorrow).pack(side="left", padx=3)
+
+        self.date_entry = ctk.CTkEntry(d_row, width=120, height=28)
+        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
+        self.date_entry.pack(side="left", padx=(10, 0))
         self.date_entry.bind("<KeyRelease>", lambda e: self._update_summary())
 
-        # Row 2: Time
-        ctk.CTkLabel(dt_frame, text="Time (Hour : Minute):", font=("Segoe UI", 12, "bold")).grid(row=1, column=0, sticky="w", padx=12, pady=(6, 12))
-        time_inner = ctk.CTkFrame(dt_frame, fg_color="transparent")
-        time_inner.grid(row=1, column=1, sticky="w", padx=10, pady=(6, 12))
+        # Row: Easy Time Adjusters (Hour : Minute)
+        t_row = ctk.CTkFrame(picker_box, fg_color="transparent")
+        t_row.pack(fill="x", padx=12, pady=(4, 10))
 
-        now_plus_10 = datetime.now() + timedelta(minutes=10)
-        self.hour_var = ctk.StringVar(value=f"{now_plus_10.hour:02d}")
-        hours = [f"{h:02d}" for h in range(24)]
-        self.hour_menu = ctk.CTkOptionMenu(time_inner, variable=self.hour_var, values=hours, width=70, command=lambda v: self._update_summary())
-        self.hour_menu.pack(side="left")
+        ctk.CTkLabel(t_row, text="Time:", font=("Segoe UI", 12, "bold"), width=50).pack(side="left")
 
-        ctk.CTkLabel(time_inner, text=":", font=("Segoe UI", 16, "bold")).pack(side="left", padx=6)
+        # Hour Box with +/-
+        init_time = datetime.now() + timedelta(minutes=15)
+        self.hour_entry = ctk.CTkEntry(t_row, width=45, height=32, font=("Segoe UI", 14, "bold"), justify="center")
+        self.hour_entry.insert(0, f"{init_time.hour:02d}")
+        self.hour_entry.pack(side="left", padx=(0, 2))
+        self.hour_entry.bind("<KeyRelease>", lambda e: self._update_summary())
 
-        self.min_var = ctk.StringVar(value=f"{now_plus_10.minute:02d}")
-        mins = [f"{m:02d}" for m in range(0, 60, 5)]
-        if self.min_var.get() not in mins:
-            mins.insert(0, self.min_var.get())
-        self.min_menu = ctk.CTkOptionMenu(time_inner, variable=self.min_var, values=mins, width=70, command=lambda v: self._update_summary())
-        self.min_menu.pack(side="left")
+        h_btn_box = ctk.CTkFrame(t_row, fg_color="transparent")
+        h_btn_box.pack(side="left", padx=(0, 6))
+        ctk.CTkButton(h_btn_box, text="▲", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_hour(1)).pack()
+        ctk.CTkButton(h_btn_box, text="▼", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_hour(-1)).pack()
 
-        # Summary box
+        ctk.CTkLabel(t_row, text=":", font=("Segoe UI", 18, "bold")).pack(side="left", padx=2)
+
+        # Minute Box with +/-
+        self.min_entry = ctk.CTkEntry(t_row, width=45, height=32, font=("Segoe UI", 14, "bold"), justify="center")
+        self.min_entry.insert(0, f"{init_time.minute:02d}")
+        self.min_entry.pack(side="left", padx=(2, 2))
+        self.min_entry.bind("<KeyRelease>", lambda e: self._update_summary())
+
+        m_btn_box = ctk.CTkFrame(t_row, fg_color="transparent")
+        m_btn_box.pack(side="left", padx=(0, 15))
+        ctk.CTkButton(m_btn_box, text="▲", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_min(5)).pack()
+        ctk.CTkButton(m_btn_box, text="▼", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_min(-5)).pack()
+
+        # Quick min step buttons
+        ctk.CTkButton(t_row, text="+5m", width=42, height=28, command=lambda: self._step_min(5)).pack(side="left", padx=2)
+        ctk.CTkButton(t_row, text="+15m", width=48, height=28, command=lambda: self._step_min(15)).pack(side="left", padx=2)
+        ctk.CTkButton(t_row, text="+1h", width=42, height=28, command=lambda: self._step_hour(1)).pack(side="left", padx=2)
+
+        # Recurring check
+        self.repeat_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(picker_box, text="🔁 Repeat Daily at this exact time", variable=self.repeat_var).pack(anchor="w", padx=12, pady=(0, 8))
+
+        # Live Countdown Confirmation Card
+        self.summary_box = ctk.CTkFrame(container, fg_color="#1a252f")
+        self.summary_box.pack(fill="x", pady=(0, 12))
+
         self.summary_label = ctk.CTkLabel(
-            container,
-            text="",
-            font=("Segoe UI", 13, "bold"),
-            text_color="#F39C12",
+            self.summary_box, text="", font=("Segoe UI", 13, "bold"), text_color="#2ECC71", padx=12, pady=8
         )
-        self.summary_label.pack(anchor="w", pady=(0, 15))
+        self.summary_label.pack(anchor="w")
         self._update_summary()
 
         # Bottom Buttons
@@ -320,8 +350,8 @@ class ScheduleDialog(ctk.CTkToplevel):
             btn_box,
             text="⏰ Confirm & Schedule",
             font=("Segoe UI", 13, "bold"),
-            fg_color="#1F6AA5",
-            hover_color="#144870",
+            fg_color="#6f42c1",
+            hover_color="#59359a",
             width=200,
             height=38,
             command=self._confirm,
@@ -338,28 +368,65 @@ class ScheduleDialog(ctk.CTkToplevel):
             command=self.destroy,
         ).pack(side="right")
 
-    def _set_preset(self, minutes=0, hours=0):
+    def _set_today(self):
+        self.date_entry.delete(0, "end")
+        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
+        self._update_summary()
+
+    def _set_tomorrow(self):
+        target = datetime.now() + timedelta(days=1)
+        self.date_entry.delete(0, "end")
+        self.date_entry.insert(0, target.strftime("%Y-%m-%d"))
+        self._update_summary()
+
+    def _add_offset(self, minutes=0, hours=0):
         target = datetime.now() + timedelta(minutes=minutes, hours=hours)
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, target.strftime("%Y-%m-%d"))
-        self.hour_var.set(f"{target.hour:02d}")
-        self.min_var.set(f"{target.minute:02d}")
+        self.hour_entry.delete(0, "end")
+        self.hour_entry.insert(0, f"{target.hour:02d}")
+        self.min_entry.delete(0, "end")
+        self.min_entry.insert(0, f"{target.minute:02d}")
         self._update_summary()
 
-    def _set_specific_time(self, hour, minute, days=0):
+    def _set_clock(self, hour, minute, days=0):
         target = datetime.now() + timedelta(days=days)
-        target = target.replace(hour=hour, minute=minute, second=0)
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, target.strftime("%Y-%m-%d"))
-        self.hour_var.set(f"{target.hour:02d}")
-        self.min_var.set(f"{target.minute:02d}")
+        self.hour_entry.delete(0, "end")
+        self.hour_entry.insert(0, f"{hour:02d}")
+        self.min_entry.delete(0, "end")
+        self.min_entry.insert(0, f"{minute:02d}")
         self._update_summary()
+
+    def _step_hour(self, delta):
+        try:
+            val = int(self.hour_entry.get() or 0)
+            new_val = (val + delta) % 24
+            self.hour_entry.delete(0, "end")
+            self.hour_entry.insert(0, f"{new_val:02d}")
+            self._update_summary()
+        except Exception:
+            pass
+
+    def _step_min(self, delta):
+        try:
+            val = int(self.min_entry.get() or 0)
+            new_val = (val + delta) % 60
+            self.min_entry.delete(0, "end")
+            self.min_entry.insert(0, f"{new_val:02d}")
+            self._update_summary()
+        except Exception:
+            pass
 
     def _get_target_datetime_str(self):
         d_str = self.date_entry.get().strip()
-        h_str = self.hour_var.get()
-        m_str = self.min_var.get()
-        return f"{d_str} {h_str}:{m_str}:00"
+        try:
+            h = int(self.hour_entry.get().strip() or 0)
+            m = int(self.min_entry.get().strip() or 0)
+            return f"{d_str} {h:02d}:{m:02d}:00"
+        except Exception:
+            return f"{d_str} 00:00:00"
 
     def _update_summary(self):
         dt_str = self._get_target_datetime_str()
@@ -368,15 +435,24 @@ class ScheduleDialog(ctk.CTkToplevel):
             now = datetime.now()
             diff = target - now
             if diff.total_seconds() <= 0:
-                self.summary_label.configure(text="⚠️ Selected time is in the past! Please pick a future time.", text_color="#dc3545")
+                self.summary_label.configure(
+                    text="⚠️ Selected time is in the past! Please choose a future time.",
+                    text_color="#e74c3c"
+                )
             else:
                 total_sec = int(diff.total_seconds())
                 hours, remainder = divmod(total_sec, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 time_str = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
-                self.summary_label.configure(text=f"⏳ Will start on {dt_str} (in ~{time_str})", text_color="#2ECC71")
+                self.summary_label.configure(
+                    text=f"⏳ Will start on {dt_str} (in ~{time_str})",
+                    text_color="#2ECC71"
+                )
         except Exception:
-            self.summary_label.configure(text="⚠️ Invalid date format. Use YYYY-MM-DD", text_color="#dc3545")
+            self.summary_label.configure(
+                text="⚠️ Invalid date format. Use YYYY-MM-DD",
+                text_color="#e74c3c"
+            )
 
     def _confirm(self):
         dt_str = self._get_target_datetime_str()
@@ -390,15 +466,20 @@ class ScheduleDialog(ctk.CTkToplevel):
             return
 
         name = self.name_entry.get().strip() or "Scheduled Download"
+        is_repeat = self.repeat_var.get()
+        if is_repeat:
+            self.target_data["repeat_daily"] = True
+
         self.scheduler.add(
             name=name,
             job_type=self.target_type,
             target_data=self.target_data,
             run_at_str=dt_str,
+            repeat_daily=is_repeat,
         )
 
         if hasattr(self.parent, "_update_status"):
-            self.parent._update_status(f"⏰ Scheduled: '{name}' at {dt_str}")
+            self.parent._update_status(f"⏰ Scheduled: '{name}' for {dt_str}")
 
         if self.on_scheduled:
             self.on_scheduled()
@@ -552,15 +633,26 @@ class SaveBatchDialog(ctk.CTkToplevel):
             "subtitle_lang": self.data.get("subtitle_lang", "en"),
         }
 
-        self.batch_manager.add(
-            name=name,
-            batch_type=self.type_var.get(),
-            url=url,
-            options=opts,
-        )
-
-        if hasattr(self.parent, "_update_status"):
-            self.parent._update_status(f"💾 Saved batch: '{name}'")
+        batch_id = self.data.get("id")
+        if batch_id:
+            updates = {
+                "name": name,
+                "type": self.type_var.get(),
+                "url": url,
+                **opts,
+            }
+            self.batch_manager.update(batch_id, updates)
+            if hasattr(self.parent, "_update_status"):
+                self.parent._update_status(f"✏️ Updated batch: '{name}'")
+        else:
+            self.batch_manager.add(
+                name=name,
+                batch_type=self.type_var.get(),
+                url=url,
+                options=opts,
+            )
+            if hasattr(self.parent, "_update_status"):
+                self.parent._update_status(f"💾 Saved batch: '{name}'")
 
         if self.on_saved:
             self.on_saved()

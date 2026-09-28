@@ -2,8 +2,10 @@
 
 import os
 import sys
+import shutil
 import subprocess
 import threading
+from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -156,74 +158,173 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} v{APP_VERSION}")
-        self.geometry("920x780")
-        self.minsize(880, 720)
+        self.geometry("980x820")
+        self.minsize(920, 720)
 
         self.dm = DownloadManager()
         self.batch_manager = BatchManager()
         self.scheduler = DownloadScheduler(runner_callback=self._run_scheduled_job)
         self.fetched_videos = []
         self.fetched_playlist_title = ""
+        self.current_nav_view = "downloads"
+        self.current_running_batch_id = None
+        self.batch_filter_var = ctk.StringVar(value="All Batches")
+        self.schedule_filter_var = ctk.StringVar(value="All Schedules")
+        self._schedule_countdown_labels = {}
 
         self._build_ui()
         self._check_system_deps()
-        self.after(2000, self._start_scheduler_ticker)
+        self.after(1000, self._start_scheduler_ticker)
 
     def _build_ui(self):
-        # Main scrollable container
-        main_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        main_container.pack(fill="both", expand=True, padx=15, pady=10)
+        # 1. Top Fixed Navigation Bar
+        self._build_top_nav_bar()
 
-        # ========== Title ==========
-        title_frame = ctk.CTkFrame(main_container, fg_color="transparent")
-        title_frame.pack(fill="x", pady=(0, 10))
+        # 2. Main Container holding the isolated views
+        self.content_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.content_container.pack(fill="both", expand=True)
 
-        title_left = ctk.CTkFrame(title_frame, fg_color="transparent")
-        title_left.pack(side="left", fill="x", expand=True)
+        # 3. Create three distinct view frames
+        self.downloads_view = ctk.CTkScrollableFrame(self.content_container, fg_color="transparent")
+        self.batches_view = ctk.CTkFrame(self.content_container, fg_color="transparent")
+        self.scheduler_view = ctk.CTkFrame(self.content_container, fg_color="transparent")
+
+        # 4. Build components for each view
+        self._build_downloads_view()
+        self._build_batches_view()
+        self._build_scheduler_view()
+
+        # 5. Show default view: Downloads Studio
+        self._switch_nav_view("downloads")
+
+    def _build_top_nav_bar(self):
+        """Build top navigation header with distinct section switchers."""
+        top_bar = ctk.CTkFrame(self, fg_color="#18191c", corner_radius=0, height=62)
+        top_bar.pack(fill="x", side="top", pady=(0, 2))
+        top_bar.pack_propagate(False)
+
+        # Left: App Brand & Version
+        brand_frame = ctk.CTkFrame(top_bar, fg_color="transparent")
+        brand_frame.pack(side="left", padx=16, pady=8)
 
         ctk.CTkLabel(
-            title_left, text="🎬 YT Video Downloader Pro",
-            font=("Segoe UI", 26, "bold"),
-        ).pack(anchor="w")
+            brand_frame, text="🎬 YT Downloader Pro",
+            font=("Segoe UI", 18, "bold"), text_color="#FFFFFF"
+        ).pack(side="left")
         ctk.CTkLabel(
-            title_left,
-            text="Download Videos • Playlists • Channels — with Full Control",
-            font=("Segoe UI", 12), text_color="gray",
-        ).pack(anchor="w")
+            brand_frame, text=f"v{APP_VERSION}",
+            font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
+        ).pack(side="left", padx=(8, 0), pady=(3, 0))
+
+        # Center: Segregated Section Switchers
+        nav_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        nav_box.pack(side="left", expand=True, pady=8)
+
+        self.nav_btn_downloads = ctk.CTkButton(
+            nav_box, text="📹 Downloads Studio", width=175, height=38,
+            font=("Segoe UI", 13, "bold"),
+            command=lambda: self._switch_nav_view("downloads")
+        )
+        self.nav_btn_downloads.pack(side="left", padx=5)
+
+        self.nav_btn_batches = ctk.CTkButton(
+            nav_box, text="📁 Batches Studio", width=175, height=38,
+            font=("Segoe UI", 13, "bold"),
+            command=lambda: self._switch_nav_view("batches")
+        )
+        self.nav_btn_batches.pack(side="left", padx=5)
+
+        self.nav_btn_scheduler = ctk.CTkButton(
+            nav_box, text="⏰ Scheduler Studio", width=175, height=38,
+            font=("Segoe UI", 13, "bold"),
+            command=lambda: self._switch_nav_view("scheduler")
+        )
+        self.nav_btn_scheduler.pack(side="left", padx=5)
+
+        # Right: Update & Restart
+        right_box = ctk.CTkFrame(top_bar, fg_color="transparent")
+        right_box.pack(side="right", padx=16, pady=8)
 
         ctk.CTkButton(
-            title_frame, text="🔄 Update & Restart", width=150, height=34,
+            right_box, text="🔄 Update & Restart", width=145, height=34,
             fg_color="#1F6AA5", hover_color="#144870",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 11, "bold"),
             command=self._update_and_restart
-        ).pack(side="right", padx=5)
+        ).pack(side="right")
 
-        # ========== Tab View ==========
-        self.tabview = ctk.CTkTabview(main_container, height=200)
+    def _switch_nav_view(self, view_name):
+        """Strictly isolate each section view to avoid any UI clutter across tabs."""
+        self.current_nav_view = view_name
+
+        active_col = "#1F6AA5"
+        active_hover = "#144870"
+        inactive_col = "#2b2d30"
+        inactive_hover = "#3a3d42"
+
+        self.nav_btn_downloads.configure(
+            fg_color=active_col if view_name == "downloads" else inactive_col,
+            hover_color=active_hover if view_name == "downloads" else inactive_hover
+        )
+        self.nav_btn_batches.configure(
+            fg_color=active_col if view_name == "batches" else inactive_col,
+            hover_color=active_hover if view_name == "batches" else inactive_hover
+        )
+        self.nav_btn_scheduler.configure(
+            fg_color=active_col if view_name == "scheduler" else inactive_col,
+            hover_color=active_hover if view_name == "scheduler" else inactive_hover
+        )
+
+        # Hide all view containers
+        self.downloads_view.pack_forget()
+        self.batches_view.pack_forget()
+        self.scheduler_view.pack_forget()
+
+        # Display exclusively the selected view
+        if view_name == "downloads":
+            self.downloads_view.pack(fill="both", expand=True, padx=15, pady=8)
+        elif view_name == "batches":
+            self.batches_view.pack(fill="both", expand=True, padx=15, pady=8)
+            self._render_batches_list()
+        elif view_name == "scheduler":
+            self.scheduler_view.pack(fill="both", expand=True, padx=15, pady=8)
+            self._render_schedules_list()
+
+    def _build_downloads_view(self):
+        """Build the dedicated Downloads Studio view (Single, Playlist, Channel, Settings, Progress, Log)."""
+        # Header banner inside downloads view
+        header = ctk.CTkFrame(self.downloads_view, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 6))
+
+        ctk.CTkLabel(
+            header, text="📹 Interactive Downloads",
+            font=("Segoe UI", 16, "bold")
+        ).pack(side="left")
+        ctk.CTkLabel(
+            header, text="— Download single videos, complete playlists, or full channels",
+            font=("Segoe UI", 11), text_color="gray"
+        ).pack(side="left", padx=8, pady=(2, 0))
+
+        # Tab View for Single, Playlist, Channel
+        self.tabview = ctk.CTkTabview(self.downloads_view, height=190)
         self.tabview.pack(fill="x", pady=(0, 10))
 
         self.tab_single = self.tabview.add("📹 Single Video")
         self.tab_playlist = self.tabview.add("📋 Playlist")
         self.tab_channel = self.tabview.add("📺 Channel")
-        self.tab_batches = self.tabview.add("📁 Batches")
-        self.tab_scheduler = self.tabview.add("⏰ Scheduler")
 
         self._build_single_tab()
         self._build_playlist_tab()
         self._build_channel_tab()
-        self._build_batches_tab()
-        self._build_scheduler_tab()
 
-        # ========== Settings ==========
-        settings_frame = ctk.CTkFrame(main_container)
+        # Download Settings Frame
+        settings_frame = ctk.CTkFrame(self.downloads_view)
         settings_frame.pack(fill="x", pady=(0, 10))
 
         ctk.CTkLabel(
             settings_frame, text="⚙️  Download Settings",
-            font=("Segoe UI", 15, "bold")
+            font=("Segoe UI", 14, "bold")
         ).pack(anchor="w", padx=15, pady=(10, 5))
 
-        # Settings grid
         sg = ctk.CTkFrame(settings_frame, fg_color="transparent")
         sg.pack(fill="x", padx=15, pady=(0, 5))
 
@@ -300,7 +401,7 @@ class App(ctk.CTk):
             variable=self.subfolder_var
         ).pack(side="left", padx=10)
 
-        # Cookies row (for VPS / Anti-Bot)
+        # Cookies row (VPS / Anti-Bot)
         cookie_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
         cookie_frame.pack(fill="x", padx=15, pady=(0, 10))
 
@@ -321,8 +422,8 @@ class App(ctk.CTk):
         )
         self.cookie_status_label.pack(side="left")
 
-        # ========== Download Directory ==========
-        dir_frame = ctk.CTkFrame(main_container)
+        # Save To Directory Frame
+        dir_frame = ctk.CTkFrame(self.downloads_view)
         dir_frame.pack(fill="x", pady=(0, 10))
 
         dir_inner = ctk.CTkFrame(dir_frame, fg_color="transparent")
@@ -348,16 +449,8 @@ class App(ctk.CTk):
             dir_inner, text="📂 Open", width=80, command=self._open_download_dir
         ).pack(side="left", padx=5)
 
-        ctk.CTkButton(
-            dir_inner, text="Browse", width=80, command=self._browse_dir
-        ).pack(side="left", padx=5)
-
-        ctk.CTkButton(
-            dir_inner, text="📂 Open", width=80, command=self._open_download_dir
-        ).pack(side="left", padx=5)
-
-        # ========== Progress ==========
-        progress_frame = ctk.CTkFrame(main_container)
+        # Progress Frame
+        progress_frame = ctk.CTkFrame(self.downloads_view)
         progress_frame.pack(fill="x", pady=(0, 10))
 
         prog_inner = ctk.CTkFrame(progress_frame, fg_color="transparent")
@@ -381,8 +474,8 @@ class App(ctk.CTk):
         )
         self.progress_percent.pack(side="right", padx=(10, 0))
 
-        # ========== Action Buttons ==========
-        action_frame = ctk.CTkFrame(main_container, fg_color="transparent")
+        # Action Buttons Frame
+        action_frame = ctk.CTkFrame(self.downloads_view, fg_color="transparent")
         action_frame.pack(fill="x", pady=(0, 10))
 
         self.download_btn = ctk.CTkButton(
@@ -422,19 +515,32 @@ class App(ctk.CTk):
         )
         self.counter_label.pack(side="right", padx=15)
 
-        # ========== Log ==========
-        log_frame = ctk.CTkFrame(main_container)
+        # Download Log Frame
+        log_frame = ctk.CTkFrame(self.downloads_view)
         log_frame.pack(fill="x", pady=(0, 5))
 
+        log_head = ctk.CTkFrame(log_frame, fg_color="transparent")
+        log_head.pack(fill="x", padx=15, pady=(8, 4))
         ctk.CTkLabel(
-            log_frame, text="📝 Download Log",
+            log_head, text="📝 Download Log",
             font=("Segoe UI", 13, "bold")
-        ).pack(anchor="w", padx=15, pady=(10, 5))
+        ).pack(side="left")
 
-        self.log_text = ctk.CTkTextbox(log_frame, height=120, font=("Consolas", 11))
+        ctk.CTkButton(
+            log_head, text="Clear Log", width=70, height=24,
+            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 10),
+            command=self._clear_download_log
+        ).pack(side="right")
+
+        self.log_text = ctk.CTkTextbox(log_frame, height=130, font=("Consolas", 11))
         self.log_text.pack(fill="x", padx=15, pady=(0, 10))
         self.log_text.configure(state="disabled")
         self._attach_textbox_context_menu(self.log_text)
+
+    def _clear_download_log(self):
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", "end")
+        self.log_text.configure(state="disabled")
 
     # ==================== Tab builders ====================
 
@@ -590,47 +696,160 @@ class App(ctk.CTk):
         """Open modal dialog to view and customize Title Rewrite Rules."""
         TitleRulesDialog(self)
 
-    # ==================== Batches Tab ====================
+    # ==================== Batches Studio View ====================
 
-    def _build_batches_tab(self):
-        """Build Saved Batches tab."""
-        header_frame = ctk.CTkFrame(self.tab_batches, fg_color="transparent")
-        header_frame.pack(fill="x", padx=10, pady=(8, 4))
+    def _build_batches_view(self):
+        """Build the dedicated full-screen Batches Studio view."""
+        # Top Header Bar
+        header = ctk.CTkFrame(self.batches_view, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 6))
+
+        h_left = ctk.CTkFrame(header, fg_color="transparent")
+        h_left.pack(side="left")
 
         ctk.CTkLabel(
-            header_frame, text="📁 Saved Download Batches",
-            font=("Segoe UI", 14, "bold")
+            h_left, text="📁 Batches Studio",
+            font=("Segoe UI", 18, "bold")
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            h_left, text="Save, organize, and trigger reusable download batches with 1-click",
+            font=("Segoe UI", 11), text_color="gray"
+        ).pack(anchor="w")
+
+        h_right = ctk.CTkFrame(header, fg_color="transparent")
+        h_right.pack(side="right")
+
+        ctk.CTkButton(
+            h_right, text="➕ Save Current Setup", width=160, height=32,
+            fg_color="#17a2b8", hover_color="#138496", font=("Segoe UI", 12, "bold"),
+            command=self._save_current_as_batch
+        ).pack(side="left", padx=4)
+
+        ctk.CTkButton(
+            h_right, text="🔄 Refresh", width=80, height=32,
+            command=self._render_batches_list
+        ).pack(side="left", padx=4)
+
+        ctk.CTkButton(
+            h_right, text="🧹 Clear Completed", width=120, height=32,
+            fg_color="#495057", hover_color="#343a40",
+            command=self._clear_completed_batches
+        ).pack(side="left", padx=4)
+
+        # Metrics and Filter Bar
+        stats_bar = ctk.CTkFrame(self.batches_view)
+        stats_bar.pack(fill="x", pady=(0, 8))
+
+        stats_inner = ctk.CTkFrame(stats_bar, fg_color="transparent")
+        stats_inner.pack(fill="x", padx=12, pady=6)
+
+        self.batch_stat_total = ctk.CTkLabel(
+            stats_inner, text="📦 Total: 0", font=("Segoe UI", 12, "bold")
+        )
+        self.batch_stat_total.pack(side="left", padx=(0, 15))
+
+        self.batch_stat_ready = ctk.CTkLabel(
+            stats_inner, text="⏳ Ready: 0", font=("Segoe UI", 12, "bold"), text_color="#17a2b8"
+        )
+        self.batch_stat_ready.pack(side="left", padx=10)
+
+        self.batch_stat_running = ctk.CTkLabel(
+            stats_inner, text="🚀 Running: 0", font=("Segoe UI", 12, "bold"), text_color="#f39c12"
+        )
+        self.batch_stat_running.pack(side="left", padx=10)
+
+        self.batch_stat_completed = ctk.CTkLabel(
+            stats_inner, text="✅ Completed: 0", font=("Segoe UI", 12, "bold"), text_color="#2ecc71"
+        )
+        self.batch_stat_completed.pack(side="left", padx=10)
+
+        filter_frame = ctk.CTkFrame(stats_inner, fg_color="transparent")
+        filter_frame.pack(side="right")
+
+        ctk.CTkLabel(filter_frame, text="Filter:", font=("Segoe UI", 11)).pack(side="left", padx=5)
+        ctk.CTkOptionMenu(
+            filter_frame, variable=self.batch_filter_var,
+            values=["All Batches", "Ready", "Running", "Completed", "Failed"],
+            width=130, height=28,
+            command=lambda _: self._render_batches_list()
+        ).pack(side="left")
+
+        # Scrollable Batch Cards Area
+        self.batches_scroll = ctk.CTkScrollableFrame(self.batches_view)
+        self.batches_scroll.pack(fill="both", expand=True, pady=(0, 8))
+
+        # Dedicated Batches Activity Log
+        b_log_frame = ctk.CTkFrame(self.batches_view)
+        b_log_frame.pack(fill="x")
+
+        b_log_head = ctk.CTkFrame(b_log_frame, fg_color="transparent")
+        b_log_head.pack(fill="x", padx=12, pady=(6, 2))
+
+        ctk.CTkLabel(
+            b_log_head, text="📋 Batch Studio Activity Log",
+            font=("Segoe UI", 12, "bold")
         ).pack(side="left")
 
         ctk.CTkButton(
-            header_frame, text="➕ Save Current as Batch", width=170, height=30,
-            fg_color="#17a2b8", hover_color="#138496",
-            command=self._save_current_as_batch
-        ).pack(side="right", padx=4)
+            b_log_head, text="Clear", width=60, height=22,
+            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 10),
+            command=self._clear_batch_log
+        ).pack(side="right")
 
-        ctk.CTkButton(
-            header_frame, text="🔄 Refresh", width=80, height=30,
-            command=self._render_batches_list
-        ).pack(side="right", padx=4)
+        self.batch_log_text = ctk.CTkTextbox(b_log_frame, height=95, font=("Consolas", 10))
+        self.batch_log_text.pack(fill="x", padx=12, pady=(0, 8))
+        self.batch_log_text.configure(state="disabled")
+        self._attach_textbox_context_menu(self.batch_log_text)
 
-        self.batches_scroll = ctk.CTkScrollableFrame(self.tab_batches, height=130)
-        self.batches_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+    def _batch_log(self, message):
+        """Append log entry specifically to Batch Studio activity log."""
+        if hasattr(self, "batch_log_text"):
+            self.batch_log_text.configure(state="normal")
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.batch_log_text.insert("end", f"[{time_str}] {message}\n")
+            self.batch_log_text.see("end")
+            self.batch_log_text.configure(state="disabled")
 
-        self._render_batches_list()
+    def _clear_batch_log(self):
+        if hasattr(self, "batch_log_text"):
+            self.batch_log_text.configure(state="normal")
+            self.batch_log_text.delete("1.0", "end")
+            self.batch_log_text.configure(state="disabled")
 
     def _render_batches_list(self):
-        """Render all saved batch cards in the batches tab."""
+        """Render all saved batch cards in the dedicated Batches Studio."""
         for widget in self.batches_scroll.winfo_children():
             widget.destroy()
 
         batches = self.batch_manager.get_all()
+        total_count = len(batches)
+        ready_count = sum(1 for b in batches if b.get("status") == "Ready")
+        running_count = sum(1 for b in batches if b.get("status") == "Running")
+        comp_count = sum(1 for b in batches if b.get("status") == "Completed")
+
+        if hasattr(self, "batch_stat_total"):
+            self.batch_stat_total.configure(text=f"📦 Total: {total_count}")
+            self.batch_stat_ready.configure(text=f"⏳ Ready: {ready_count}")
+            self.batch_stat_running.configure(text=f"🚀 Running: {running_count}")
+            self.batch_stat_completed.configure(text=f"✅ Completed: {comp_count}")
+
+        # Filter
+        selected_filter = self.batch_filter_var.get()
+        if selected_filter != "All Batches":
+            batches = [b for b in batches if b.get("status") == selected_filter]
+
         if not batches:
             empty_frame = ctk.CTkFrame(self.batches_scroll, fg_color="transparent")
-            empty_frame.pack(fill="both", expand=True, pady=25)
+            empty_frame.pack(fill="both", expand=True, pady=40)
             ctk.CTkLabel(
                 empty_frame,
-                text="📁 No saved download batches yet.\nSet up a Single, Playlist, or Channel download and click '💾 Save as Batch'!",
-                font=("Segoe UI", 12), text_color="gray", justify="center"
+                text="📁 No download batches found in this view.\nConfigure any download in 'Downloads Studio' and click '💾 Save as Batch'!",
+                font=("Segoe UI", 13), text_color="gray", justify="center"
+            ).pack(pady=(0, 10))
+            ctk.CTkButton(
+                empty_frame, text="➕ Save Current Setup as Batch", width=220, height=36,
+                fg_color="#17a2b8", hover_color="#138496", font=("Segoe UI", 12, "bold"),
+                command=self._save_current_as_batch
             ).pack()
             return
 
@@ -644,50 +863,64 @@ class App(ctk.CTk):
             naming = b.get("naming_scheme", "title")
             sel_val = b.get("selection_value", "")
             status = b.get("status", "Ready")
+            last_run = b.get("last_run", "")
 
             type_icons = {"single": "📹 Single", "playlist": "📋 Playlist", "channel": "📺 Channel"}
             type_str = type_icons.get(btype, "🎬 Video")
 
             card = ctk.CTkFrame(self.batches_scroll)
-            card.pack(fill="x", padx=5, pady=4)
+            card.pack(fill="x", padx=6, pady=5)
 
             left = ctk.CTkFrame(card, fg_color="transparent")
-            left.pack(side="left", fill="both", expand=True, padx=10, pady=8)
+            left.pack(side="left", fill="both", expand=True, padx=12, pady=10)
 
             title_row = ctk.CTkFrame(left, fg_color="transparent")
             title_row.pack(fill="x")
             ctk.CTkLabel(
-                title_row, text=name, font=("Segoe UI", 13, "bold")
+                title_row, text=name, font=("Segoe UI", 14, "bold")
             ).pack(side="left")
             ctk.CTkLabel(
                 title_row, text=f" [{type_str}]", font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
-            ).pack(side="left", padx=5)
+            ).pack(side="left", padx=6)
 
-            sub_text = f"🔗 {url[:50]}...  •  ⚙️ {quality} ({fmt})  •  🏷️ {naming}"
+            sub_text = f"🔗 {url[:55]}...  •  ⚙️ {quality} ({fmt})  •  🏷️ {naming}"
             if sel_val:
                 sub_text += f"  •  Range: {sel_val}"
+            if last_run:
+                sub_text += f"  •  Last run: {last_run}"
             ctk.CTkLabel(
-                left, text=sub_text, font=("Segoe UI", 10), text_color="gray", anchor="w"
-            ).pack(fill="x", pady=(2, 0))
+                left, text=sub_text, font=("Segoe UI", 10), text_color="#a0a0a0", anchor="w"
+            ).pack(fill="x", pady=(3, 0))
+
+            # If running, show inline progress
+            if self.current_running_batch_id == bid:
+                run_bar = ctk.CTkProgressBar(left, height=8)
+                run_bar.pack(fill="x", pady=(6, 0))
+                run_bar.set(self.progress_bar.get())
 
             right = ctk.CTkFrame(card, fg_color="transparent")
-            right.pack(side="right", padx=10, pady=8)
+            right.pack(side="right", padx=12, pady=10)
 
-            status_colors = {"Ready": "#17a2b8", "Running": "#ffc107", "Completed": "#28a745", "Failed": "#dc3545"}
+            status_colors = {
+                "Ready": "#17a2b8",
+                "Running": "#f39c12",
+                "Completed": "#2ecc71",
+                "Failed": "#e74c3c"
+            }
             col = status_colors.get(status, "gray")
             ctk.CTkLabel(
-                right, text=f"● {status}", font=("Segoe UI", 11, "bold"), text_color=col, width=80
+                right, text=f"● {status}", font=("Segoe UI", 12, "bold"), text_color=col, width=85
             ).pack(side="left", padx=5)
 
             ctk.CTkButton(
-                right, text="▶️ Run Now", width=85, height=28,
-                fg_color="#28a745", hover_color="#218838",
+                right, text="▶️ Run Now", width=85, height=30,
+                fg_color="#28a745", hover_color="#218838", font=("Segoe UI", 11, "bold"),
                 command=lambda b_item=b: self._run_batch(b_item)
             ).pack(side="left", padx=3)
 
             ctk.CTkButton(
-                right, text="⏰ Schedule", width=85, height=28,
-                fg_color="#6f42c1", hover_color="#59359a",
+                right, text="⏰ Schedule", width=85, height=30,
+                fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 11, "bold"),
                 command=lambda b_item=b: self._open_schedule_dialog(
                     target_name=b_item.get("name"),
                     target_type="batch",
@@ -696,21 +929,49 @@ class App(ctk.CTk):
             ).pack(side="left", padx=3)
 
             ctk.CTkButton(
-                right, text="🗑️", width=35, height=28,
+                right, text="✏️ Edit", width=65, height=30,
+                fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 11),
+                command=lambda b_item=b: self._edit_batch(b_item)
+            ).pack(side="left", padx=3)
+
+            ctk.CTkButton(
+                right, text="🗑️", width=35, height=30,
                 fg_color="#dc3545", hover_color="#c82333",
                 command=lambda bid_val=bid: self._delete_batch(bid_val)
             ).pack(side="left", padx=3)
+
+    def _edit_batch(self, batch_item):
+        """Open batch editor dialog."""
+        SaveBatchDialog(
+            parent=self,
+            batch_manager=self.batch_manager,
+            default_data=batch_item,
+            on_saved=self._render_batches_list
+        )
 
     def _delete_batch(self, batch_id):
         if messagebox.askyesno("Delete Batch", "Are you sure you want to delete this batch?"):
             self.batch_manager.delete(batch_id)
             self._render_batches_list()
             self._update_status("Batch deleted.")
+            self._batch_log(f"Deleted batch {batch_id}")
+
+    def _clear_completed_batches(self):
+        batches = self.batch_manager.get_all()
+        to_del = [b["id"] for b in batches if b.get("status") in ("Completed", "Failed")]
+        if not to_del:
+            messagebox.showinfo("Batches", "No completed or failed batches to clear.")
+            return
+        if messagebox.askyesno("Clear Completed", f"Clear {len(to_del)} completed / failed batches?"):
+            for bid in to_del:
+                self.batch_manager.delete(bid)
+            self._render_batches_list()
+            self._batch_log(f"Cleared {len(to_del)} finished batches.")
 
     def _save_current_as_batch(self):
         pkg = self._get_current_download_package()
         if not pkg["url"]:
-            messagebox.showwarning("Warning", "Please enter a valid YouTube URL first!")
+            messagebox.showwarning("Warning", "Please enter a valid YouTube URL in Downloads Studio first!")
             return
         SaveBatchDialog(
             parent=self,
@@ -719,53 +980,161 @@ class App(ctk.CTk):
             on_saved=self._render_batches_list
         )
 
-    # ==================== Scheduler Tab ====================
+    # ==================== Scheduler Studio View ====================
 
-    def _build_scheduler_tab(self):
-        """Build Scheduler tab."""
-        header_frame = ctk.CTkFrame(self.tab_scheduler, fg_color="transparent")
-        header_frame.pack(fill="x", padx=10, pady=(8, 4))
+    def _build_scheduler_view(self):
+        """Build the dedicated full-screen Scheduler Studio view."""
+        # Top Live Countdown Banner & Hero Card
+        hero_frame = ctk.CTkFrame(self.scheduler_view, fg_color="#1e192e", corner_radius=8)
+        hero_frame.pack(fill="x", pady=(0, 8))
+
+        hero_top = ctk.CTkFrame(hero_frame, fg_color="transparent")
+        hero_top.pack(fill="x", padx=16, pady=(10, 4))
 
         ctk.CTkLabel(
-            header_frame, text="⏰ Automated Download Scheduler",
-            font=("Segoe UI", 14, "bold")
+            hero_top, text="⏰ Automated Download Scheduler",
+            font=("Segoe UI", 16, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
 
+        self.scheduler_ticker_label = ctk.CTkLabel(
+            hero_frame, text="⏳ No upcoming scheduled downloads.",
+            font=("Segoe UI", 13, "bold"), text_color="#00d2ff"
+        )
+        self.scheduler_ticker_label.pack(anchor="w", padx=16, pady=(0, 6))
+
+        hero_stats = ctk.CTkFrame(hero_frame, fg_color="transparent")
+        hero_stats.pack(fill="x", padx=16, pady=(0, 10))
+
+        self.sched_stat_active = ctk.CTkLabel(
+            hero_stats, text="⏰ Active: 0", font=("Segoe UI", 11, "bold"), text_color="#f39c12"
+        )
+        self.sched_stat_active.pack(side="left", padx=(0, 15))
+
+        self.sched_stat_daily = ctk.CTkLabel(
+            hero_stats, text="🔁 Daily Recurring: 0", font=("Segoe UI", 11, "bold"), text_color="#2ecc71"
+        )
+        self.sched_stat_daily.pack(side="left", padx=10)
+
+        self.sched_stat_completed = ctk.CTkLabel(
+            hero_stats, text="✅ Completed: 0", font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
+        )
+        self.sched_stat_completed.pack(side="left", padx=10)
+
+        # Control and Filter Bar
+        ctrl_bar = ctk.CTkFrame(self.scheduler_view)
+        ctrl_bar.pack(fill="x", pady=(0, 8))
+
+        ctrl_inner = ctk.CTkFrame(ctrl_bar, fg_color="transparent")
+        ctrl_inner.pack(fill="x", padx=12, pady=6)
+
+        ctk.CTkLabel(ctrl_inner, text="Filter:", font=("Segoe UI", 11)).pack(side="left", padx=5)
+        ctk.CTkOptionMenu(
+            ctrl_inner, variable=self.schedule_filter_var,
+            values=["All Schedules", "Pending Only", "Recurring Daily", "Completed", "Cancelled"],
+            width=150, height=28,
+            command=lambda _: self._render_schedules_list()
+        ).pack(side="left", padx=5)
+
         ctk.CTkButton(
-            header_frame, text="➕ Schedule Current", width=150, height=30,
-            fg_color="#6f42c1", hover_color="#59359a",
+            ctrl_inner, text="➕ Schedule Current Setup", width=180, height=30,
+            fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 11, "bold"),
             command=self._schedule_current_download
         ).pack(side="right", padx=4)
 
         ctk.CTkButton(
-            header_frame, text="🔄 Refresh", width=80, height=30,
+            ctrl_inner, text="🔄 Refresh", width=80, height=30,
             command=self._render_schedules_list
         ).pack(side="right", padx=4)
 
-        self.scheduler_ticker_label = ctk.CTkLabel(
-            self.tab_scheduler, text="⏳ No upcoming scheduled downloads.",
-            font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
-        )
-        self.scheduler_ticker_label.pack(anchor="w", padx=10, pady=(0, 4))
+        ctk.CTkButton(
+            ctrl_inner, text="🧹 Clear Inactive", width=110, height=30,
+            fg_color="#495057", hover_color="#343a40",
+            command=self._clear_inactive_schedules
+        ).pack(side="right", padx=4)
 
-        self.schedules_scroll = ctk.CTkScrollableFrame(self.tab_scheduler, height=120)
-        self.schedules_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+        # Scrollable Schedule Cards Area
+        self.schedules_scroll = ctk.CTkScrollableFrame(self.scheduler_view)
+        self.schedules_scroll.pack(fill="both", expand=True, pady=(0, 8))
 
-        self._render_schedules_list()
+        # Dedicated Scheduler Execution Log
+        s_log_frame = ctk.CTkFrame(self.scheduler_view)
+        s_log_frame.pack(fill="x")
+
+        s_log_head = ctk.CTkFrame(s_log_frame, fg_color="transparent")
+        s_log_head.pack(fill="x", padx=12, pady=(6, 2))
+
+        ctk.CTkLabel(
+            s_log_head, text="⏰ Scheduler Execution & Trigger Log",
+            font=("Segoe UI", 12, "bold")
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            s_log_head, text="Clear", width=60, height=22,
+            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 10),
+            command=self._clear_scheduler_log
+        ).pack(side="right")
+
+        self.scheduler_log_text = ctk.CTkTextbox(s_log_frame, height=95, font=("Consolas", 10))
+        self.scheduler_log_text.pack(fill="x", padx=12, pady=(0, 8))
+        self.scheduler_log_text.configure(state="disabled")
+        self._attach_textbox_context_menu(self.scheduler_log_text)
+
+    def _scheduler_log(self, message):
+        """Append log entry specifically to Scheduler Studio activity log."""
+        if hasattr(self, "scheduler_log_text"):
+            self.scheduler_log_text.configure(state="normal")
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.scheduler_log_text.insert("end", f"[{time_str}] {message}\n")
+            self.scheduler_log_text.see("end")
+            self.scheduler_log_text.configure(state="disabled")
+
+    def _clear_scheduler_log(self):
+        if hasattr(self, "scheduler_log_text"):
+            self.scheduler_log_text.configure(state="normal")
+            self.scheduler_log_text.delete("1.0", "end")
+            self.scheduler_log_text.configure(state="disabled")
 
     def _render_schedules_list(self):
-        """Render all scheduled jobs in the scheduler tab."""
+        """Render all scheduled jobs in the dedicated Scheduler Studio."""
         for widget in self.schedules_scroll.winfo_children():
             widget.destroy()
 
+        self._schedule_countdown_labels.clear()
+
         jobs = self.scheduler.get_all()
+        total_count = len(jobs)
+        active_count = sum(1 for j in jobs if j.get("status") == "Pending")
+        daily_count = sum(1 for j in jobs if j.get("repeat_daily"))
+        comp_count = sum(1 for j in jobs if j.get("status") == "Completed")
+
+        if hasattr(self, "sched_stat_active"):
+            self.sched_stat_active.configure(text=f"⏰ Active: {active_count}")
+            self.sched_stat_daily.configure(text=f"🔁 Daily Recurring: {daily_count}")
+            self.sched_stat_completed.configure(text=f"✅ Completed: {comp_count}")
+
+        # Filter
+        selected_filter = self.schedule_filter_var.get()
+        if selected_filter == "Pending Only":
+            jobs = [j for j in jobs if j.get("status") == "Pending"]
+        elif selected_filter == "Recurring Daily":
+            jobs = [j for j in jobs if j.get("repeat_daily")]
+        elif selected_filter == "Completed":
+            jobs = [j for j in jobs if j.get("status") == "Completed"]
+        elif selected_filter == "Cancelled":
+            jobs = [j for j in jobs if j.get("status") in ("Cancelled", "Failed")]
+
         if not jobs:
             empty_frame = ctk.CTkFrame(self.schedules_scroll, fg_color="transparent")
-            empty_frame.pack(fill="both", expand=True, pady=25)
+            empty_frame.pack(fill="both", expand=True, pady=40)
             ctk.CTkLabel(
                 empty_frame,
-                text="⏰ No scheduled downloads yet.\nSchedule any batch or current download to start automatically at your chosen time!",
-                font=("Segoe UI", 12), text_color="gray", justify="center"
+                text="⏰ No scheduled tasks found in this view.\nSchedule any download or batch to run automatically whenever you want!",
+                font=("Segoe UI", 13), text_color="gray", justify="center"
+            ).pack(pady=(0, 10))
+            ctk.CTkButton(
+                empty_frame, text="➕ Schedule Current Setup", width=200, height=36,
+                fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 12, "bold"),
+                command=self._schedule_current_download
             ).pack()
             return
 
@@ -776,49 +1145,73 @@ class App(ctk.CTk):
             status = job.get("status", "Pending")
             jtype = job.get("job_type", "direct")
             tdata = job.get("target_data", {})
+            repeat_daily = job.get("repeat_daily", False)
             countdown = self.scheduler.get_countdown(run_at) if status == "Pending" else status
 
             card = ctk.CTkFrame(self.schedules_scroll)
-            card.pack(fill="x", padx=5, pady=4)
+            card.pack(fill="x", padx=6, pady=5)
 
             left = ctk.CTkFrame(card, fg_color="transparent")
-            left.pack(side="left", fill="both", expand=True, padx=10, pady=8)
+            left.pack(side="left", fill="both", expand=True, padx=12, pady=10)
 
             title_row = ctk.CTkFrame(left, fg_color="transparent")
             title_row.pack(fill="x")
-            ctk.CTkLabel(title_row, text=name, font=("Segoe UI", 13, "bold")).pack(side="left")
+            ctk.CTkLabel(title_row, text=name, font=("Segoe UI", 14, "bold")).pack(side="left")
             ctk.CTkLabel(
-                title_row, text=f" [{jtype.upper()}]", font=("Segoe UI", 11), text_color="#3498DB"
-            ).pack(side="left", padx=5)
+                title_row, text=f" [{jtype.upper()}]", font=("Segoe UI", 11, "bold"), text_color="#3498DB"
+            ).pack(side="left", padx=6)
+
+            if repeat_daily:
+                r_badge = ctk.CTkLabel(
+                    title_row, text="🔁 DAILY RECURRING", font=("Segoe UI", 9, "bold"),
+                    text_color="#2ECC71", fg_color="#173426", corner_radius=4, padx=6, pady=2
+                )
+                r_badge.pack(side="left", padx=6)
 
             target_url = tdata.get("url", "")
-            sub = f"⏰ Run at: {run_at} (⏳ {countdown})"
+            sub = f"⏰ Scheduled Run: {run_at}"
             if target_url:
-                sub += f"  •  🔗 {target_url[:40]}..."
-            ctk.CTkLabel(left, text=sub, font=("Segoe UI", 10), text_color="gray", anchor="w").pack(fill="x", pady=(2, 0))
+                sub += f"  •  🔗 {target_url[:45]}..."
+            ctk.CTkLabel(left, text=sub, font=("Segoe UI", 10), text_color="#a0a0a0", anchor="w").pack(fill="x", pady=(3, 0))
+
+            cd_label = ctk.CTkLabel(
+                left, text=f"⏳ Countdown: {countdown}",
+                font=("Segoe UI", 11, "bold"),
+                text_color="#00d2ff" if status == "Pending" else "gray",
+                anchor="w"
+            )
+            cd_label.pack(fill="x", pady=(2, 0))
+            if status == "Pending":
+                self._schedule_countdown_labels[jid] = (cd_label, run_at)
 
             right = ctk.CTkFrame(card, fg_color="transparent")
-            right.pack(side="right", padx=10, pady=8)
+            right.pack(side="right", padx=12, pady=10)
 
-            status_colors = {"Pending": "#f39c12", "Running": "#3498db", "Completed": "#2ecc71", "Cancelled": "#e74c3c", "Failed": "#e74c3c"}
+            status_colors = {
+                "Pending": "#f39c12",
+                "Running": "#3498db",
+                "Completed": "#2ecc71",
+                "Cancelled": "#e74c3c",
+                "Failed": "#e74c3c"
+            }
             col = status_colors.get(status, "gray")
-            ctk.CTkLabel(right, text=status, font=("Segoe UI", 11, "bold"), text_color=col, width=75).pack(side="left", padx=5)
+            ctk.CTkLabel(right, text=status, font=("Segoe UI", 12, "bold"), text_color=col, width=80).pack(side="left", padx=5)
 
             if status == "Pending":
                 ctk.CTkButton(
-                    right, text="▶️ Run Now", width=80, height=28,
-                    fg_color="#28a745", hover_color="#218838",
+                    right, text="▶️ Run Now", width=85, height=30,
+                    fg_color="#28a745", hover_color="#218838", font=("Segoe UI", 11, "bold"),
                     command=lambda j_item=job: self._run_scheduled_job(j_item)
                 ).pack(side="left", padx=3)
 
                 ctk.CTkButton(
-                    right, text="⏸️ Cancel", width=75, height=28,
-                    fg_color="#ffc107", hover_color="#e0a800", text_color="black",
+                    right, text="⏸️ Cancel", width=75, height=30,
+                    fg_color="#ffc107", hover_color="#e0a800", text_color="black", font=("Segoe UI", 11, "bold"),
                     command=lambda jid_val=jid: self._cancel_schedule(jid_val)
                 ).pack(side="left", padx=3)
 
             ctk.CTkButton(
-                right, text="🗑️", width=35, height=28,
+                right, text="🗑️", width=35, height=30,
                 fg_color="#dc3545", hover_color="#c82333",
                 command=lambda jid_val=jid: self._delete_schedule(jid_val)
             ).pack(side="left", padx=3)
@@ -828,16 +1221,30 @@ class App(ctk.CTk):
             self.scheduler.delete(job_id)
             self._render_schedules_list()
             self._update_status("Schedule deleted.")
+            self._scheduler_log(f"Deleted task {job_id}")
 
     def _cancel_schedule(self, job_id):
         self.scheduler.cancel(job_id)
         self._render_schedules_list()
         self._update_status("Schedule cancelled.")
+        self._scheduler_log(f"Cancelled task {job_id}")
+
+    def _clear_inactive_schedules(self):
+        jobs = self.scheduler.get_all()
+        to_del = [j["id"] for j in jobs if j.get("status") in ("Completed", "Cancelled", "Failed")]
+        if not to_del:
+            messagebox.showinfo("Scheduler", "No inactive or completed tasks to clear.")
+            return
+        if messagebox.askyesno("Clear Inactive", f"Clear {len(to_del)} finished / cancelled schedules?"):
+            for jid in to_del:
+                self.scheduler.delete(jid)
+            self._render_schedules_list()
+            self._scheduler_log(f"Cleared {len(to_del)} inactive schedules.")
 
     def _schedule_current_download(self):
         pkg = self._get_current_download_package()
         if not pkg["url"]:
-            messagebox.showwarning("Warning", "Please enter a valid YouTube URL first!")
+            messagebox.showwarning("Warning", "Please enter a valid YouTube URL in Downloads Studio first!")
             return
         ScheduleDialog(
             parent=self,
@@ -859,7 +1266,7 @@ class App(ctk.CTk):
         )
 
     def _start_scheduler_ticker(self):
-        """Update live countdown on scheduler tab periodically."""
+        """Update live countdown across Scheduler Studio dynamically every 1 second."""
         try:
             jobs = self.scheduler.get_all()
             pending = [j for j in jobs if j.get("status") == "Pending"]
@@ -870,14 +1277,23 @@ class App(ctk.CTk):
                 cd = self.scheduler.get_countdown(run_at)
                 if hasattr(self, "scheduler_ticker_label"):
                     self.scheduler_ticker_label.configure(
-                        text=f"⏳ Next: '{name}' starts in {cd} ({run_at})"
+                        text=f"⏳ Next: '{name}' starts in {cd}  (Scheduled for {run_at})"
                     )
             else:
                 if hasattr(self, "scheduler_ticker_label"):
                     self.scheduler_ticker_label.configure(text="⏳ No upcoming scheduled downloads.")
+
+            # Live update per-card countdowns if in Scheduler Studio
+            if self.current_nav_view == "scheduler" and hasattr(self, "_schedule_countdown_labels"):
+                for jid, (lbl, r_at) in list(self._schedule_countdown_labels.items()):
+                    try:
+                        c_text = self.scheduler.get_countdown(r_at)
+                        lbl.configure(text=f"⏳ Countdown: {c_text}")
+                    except Exception:
+                        pass
         except Exception:
             pass
-        self.after(2000, self._start_scheduler_ticker)
+        self.after(1000, self._start_scheduler_ticker)
 
     def _get_current_download_package(self):
         """Extract all current configuration details from the active tab and settings."""
@@ -931,12 +1347,16 @@ class App(ctk.CTk):
             messagebox.showerror("Error", "Batch has no URL!")
             return
 
+        self.current_running_batch_id = batch["id"]
         self.batch_manager.mark_status(batch["id"], "Running", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         self._render_batches_list()
+        self._batch_log(f"▶️ Starting batch: '{batch.get('name')}'")
 
         def done_callback(success):
+            self.current_running_batch_id = None
             status = "Completed" if success else "Failed"
             self.batch_manager.mark_status(batch["id"], status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            self._batch_log(f"Batch '{batch.get('name')}' finished with status: {status}")
             self.after(0, self._render_batches_list)
 
         self._execute_package_download(batch, on_complete=done_callback)
@@ -944,21 +1364,29 @@ class App(ctk.CTk):
     def _run_scheduled_job(self, job):
         """Called automatically by DownloadScheduler when scheduled time arrives."""
         self.scheduler.set_busy(True)
-        self.after(0, lambda: self._update_status(f"⏰ Scheduler triggered: '{job.get('name')}'!"))
+        job_name = job.get("name", "Scheduled Task")
+        msg = f"⏰ Scheduler triggered: '{job_name}'!"
+        self.after(0, lambda: self._update_status(msg))
+        self.after(0, lambda: self._scheduler_log(msg))
 
         jtype = job.get("job_type", "direct")
         tdata = job.get("target_data", {})
 
         def done_callback(success):
             st = "Completed" if success else "Failed"
-            self.scheduler.mark_status(job["id"], st, f"Finished at {datetime.now().strftime('%H:%M:%S')}")
+            finish_msg = f"Finished at {datetime.now().strftime('%H:%M:%S')}"
+            self.scheduler.mark_status(job["id"], st, finish_msg)
             self.scheduler.set_busy(False)
+            self._scheduler_log(f"✅ Job '{job_name}' finished as {st} ({finish_msg})")
+            if job.get("repeat_daily"):
+                self._scheduler_log(f"🔁 Job '{job_name}' auto-rescheduled for tomorrow!")
             self.after(0, self._render_schedules_list)
 
         if jtype == "batch":
             bid = tdata.get("id")
             saved_batch = self.batch_manager.get(bid) if bid else tdata
             if saved_batch:
+                self.current_running_batch_id = bid
                 self.after(0, lambda: self._execute_package_download(saved_batch, on_complete=done_callback))
             else:
                 done_callback(False)
@@ -1562,8 +1990,11 @@ class App(ctk.CTk):
         self.log_text.configure(state="disabled")
 
     def _update_status(self, text):
-        self.status_label.configure(text=text)
+        if hasattr(self, "status_label"):
+            self.status_label.configure(text=text)
         self._log(text)
+        if getattr(self, "current_running_batch_id", None):
+            self._batch_log(text)
 
     def _update_progress(self, percent):
         self.progress_bar.set(percent / 100)

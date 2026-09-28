@@ -41,6 +41,13 @@ class DownloadScheduler:
         except Exception:
             return []
 
+    def get(self, job_id):
+        """Get a single scheduled job by ID."""
+        for j in self.get_all():
+            if j.get("id") == job_id:
+                return j
+        return None
+
     def save_all(self, jobs):
         """Save jobs to schedules.json."""
         try:
@@ -50,7 +57,7 @@ class DownloadScheduler:
         except Exception:
             return False
 
-    def add(self, name, job_type, target_data, run_at_str):
+    def add(self, name, job_type, target_data, run_at_str, repeat_daily=False):
         """Add a new scheduled job.
 
         Args:
@@ -58,14 +65,17 @@ class DownloadScheduler:
             job_type: 'batch' (saved batch id) or 'direct' (raw options)
             target_data: Dict with url/batch_id and download options
             run_at_str: Scheduled time formatted as 'YYYY-MM-DD HH:MM:SS'
+            repeat_daily: Whether to repeat this job automatically every 24 hours
         """
         jobs = self.get_all()
+        is_repeat = repeat_daily or (isinstance(target_data, dict) and target_data.get("repeat_daily", False))
         job = {
             "id": f"sched_{uuid.uuid4().hex[:8]}",
             "name": name or f"Schedule {len(jobs) + 1}",
             "job_type": job_type,
             "target_data": target_data,
             "run_at": run_at_str,
+            "repeat_daily": bool(is_repeat),
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "status": "Pending",  # Pending, Running, Completed, Failed, Cancelled
             "log": "",
@@ -90,10 +100,25 @@ class DownloadScheduler:
         return False
 
     def mark_status(self, job_id, status, log_msg=""):
-        """Update job status and log message."""
+        """Update job status and log message, rescheduling if repeat_daily is True."""
+        from datetime import timedelta
         jobs = self.get_all()
         for j in jobs:
             if j.get("id") == job_id:
+                tdata = j.get("target_data", {})
+                is_repeat = j.get("repeat_daily") or (isinstance(tdata, dict) and tdata.get("repeat_daily"))
+                if status == "Completed" and is_repeat:
+                    try:
+                        cur_target = datetime.strptime(j["run_at"], "%Y-%m-%d %H:%M:%S")
+                        next_target = cur_target + timedelta(days=1)
+                        j["run_at"] = next_target.strftime("%Y-%m-%d %H:%M:%S")
+                        j["status"] = "Pending"
+                        j["log"] = f"Finished at {datetime.now().strftime('%H:%M:%S')}. Next run scheduled for {j['run_at']}."
+                        self.save_all(jobs)
+                        return True
+                    except Exception:
+                        pass
+
                 j["status"] = status
                 if log_msg:
                     j["log"] = log_msg
