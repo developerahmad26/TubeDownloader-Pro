@@ -784,19 +784,26 @@ class App(ctk.CTk):
             subprocess.run(["git", "fetch", "origin", "main"], timeout=15)
             subprocess.run(["git", "reset", "--hard", "origin/main"], timeout=15)
             subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"], timeout=45)
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp", "--quiet"], timeout=45)
             if sys.platform.startswith('linux'):
-                if not shutil.which('node') or not shutil.which('xclip'):
-                    subprocess.run(["apt", "install", "-y", "nodejs", "xclip"], timeout=60)
+                if not shutil.which('node') and not shutil.which('deno') and not shutil.which('nodejs'):
+                    subprocess.run(["apt", "update", "-y"], timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["apt", "install", "-y", "nodejs", "xclip"], timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists('/usr/bin/nodejs') and not os.path.exists('/usr/bin/node'):
+                    try:
+                        os.symlink('/usr/bin/nodejs', '/usr/bin/node')
+                    except Exception:
+                        pass
         except Exception:
             pass
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
     def _check_system_deps(self):
-        """Ensure JavaScript runtime (Node.js) and clipboard tools (xclip) are available."""
+        """Ensure JavaScript runtime (Node.js/Deno) and clipboard tools (xclip) are available."""
         def worker():
-            has_node = shutil.which('node') is not None
-            has_deno = shutil.which('deno') is not None
+            has_node = (shutil.which('node') is not None) or (shutil.which('nodejs') is not None) or os.path.exists('/usr/bin/nodejs')
+            has_deno = shutil.which('deno') is not None or os.path.exists(os.path.expanduser('~/.deno/bin/deno'))
             if has_node or has_deno:
                 rt = 'Node.js' if has_node else 'Deno'
                 self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt} active (YouTube challenge solver enabled)"))
@@ -804,6 +811,11 @@ class App(ctk.CTk):
                 self.after(0, lambda: self._log("⚠️ Node.js missing! YouTube requires Node.js to decrypt video streams."))
 
             if sys.platform.startswith('linux'):
+                if os.path.exists('/usr/bin/nodejs') and not os.path.exists('/usr/bin/node'):
+                    try:
+                        os.symlink('/usr/bin/nodejs', '/usr/bin/node')
+                    except Exception:
+                        pass
                 missing = []
                 if not has_node and not has_deno:
                     missing.append('nodejs')

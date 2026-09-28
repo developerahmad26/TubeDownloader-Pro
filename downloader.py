@@ -39,6 +39,55 @@ def get_ffmpeg_dir():
     return None
 
 
+def get_js_runtime_config():
+    """Find or auto-install Node.js or Deno JS runtime for yt-dlp challenge solving."""
+    import sys
+    # 1. Check system PATH
+    for name in ['deno', 'node', 'nodejs']:
+        p = shutil.which(name)
+        if p:
+            rt_type = 'deno' if name == 'deno' else 'node'
+            return {rt_type: {'path': p}}
+
+    # 2. Check standard Linux / VPS paths
+    home = os.path.expanduser("~")
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        ('deno', os.path.join(app_dir, 'deno')),
+        ('deno', os.path.join(home, '.deno', 'bin', 'deno')),
+        ('deno', '/root/.deno/bin/deno'),
+        ('deno', '/usr/bin/deno'),
+        ('deno', '/usr/local/bin/deno'),
+        ('node', '/usr/bin/node'),
+        ('node', '/usr/bin/nodejs'),
+        ('node', '/usr/local/bin/node'),
+        ('node', '/usr/local/bin/nodejs'),
+        ('node', '/bin/node'),
+        ('node', '/bin/nodejs'),
+        ('node', '/snap/bin/node'),
+    ]
+    for rt_type, path in candidates:
+        if path and os.path.isfile(path) and os.access(path, os.X_OK):
+            return {rt_type: {'path': path}}
+
+    # 3. If on Linux and missing, auto-download standalone Deno binary (fast, no root needed)
+    if sys.platform.startswith('linux'):
+        try:
+            import urllib.request, zipfile, io
+            url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"
+            local_deno = os.path.join(app_dir, 'deno')
+            req = urllib.request.urlopen(url, timeout=25)
+            with zipfile.ZipFile(io.BytesIO(req.read())) as zf:
+                zf.extract("deno", path=app_dir)
+            os.chmod(local_deno, 0o755)
+            if os.path.isfile(local_deno):
+                return {'deno': {'path': local_deno}}
+        except Exception:
+            pass
+
+    return None
+
+
 class ErrorCaptureLogger:
     """Custom logger to capture yt-dlp warnings and errors for reporting."""
 
@@ -209,8 +258,9 @@ class DownloadManager:
                 }
             },
         }
-        if shutil.which('node'):
-            ydl_opts['js_runtimes'] = {'node': {}}
+        js_rt = get_js_runtime_config()
+        if js_rt:
+            ydl_opts['js_runtimes'] = js_rt
 
         cookie_path = self.find_cookie_file()
         if cookie_path:
@@ -394,9 +444,10 @@ class DownloadManager:
         if self.ffmpeg_dir:
             opts['ffmpeg_location'] = self.ffmpeg_dir
 
-        # Set Node.js JS runtime if available
-        if shutil.which('node'):
-            opts['js_runtimes'] = {'node': {}}
+        # Configure JS runtime (Node.js or Deno)
+        js_rt = get_js_runtime_config()
+        if js_rt:
+            opts['js_runtimes'] = js_rt
 
         # Auto-detect cookies.txt if present
         cookie_path = self.find_cookie_file()
@@ -507,20 +558,45 @@ class DownloadManager:
             if status_callback:
                 status_callback("Starting download...")
 
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                result = ydl.download([url])
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    result = ydl.download([url])
+                files_after = self._get_files_in_dir(base_dir)
+                new_files = files_after - files_before
+            except Exception as e:
+                result = 1
+                files_after = self._get_files_in_dir(base_dir)
+                new_files = files_after - files_before
+                if not logger.get_last_error():
+                    logger.error(str(e))
 
-            files_after = self._get_files_in_dir(base_dir)
-            new_files = files_after - files_before
+            # Multi-tiered fallback if primary download failed
+            if result != 0:
+                is_audio = "Audio Only" in quality
+                tier1_fmt = 'bestaudio/best' if is_audio else 'bestvideo+bestaudio/best'
+                tier2_fmt = 'bestaudio/best' if is_audio else 'best[height<=720]/18/22/best'
 
-            last_err = logger.get_last_error() or f"Code {result}"
-            if result != 0 and any(token in last_err.lower() for token in ['403', 'requested format', 'unavailable', 'forbidden']):
                 if status_callback:
-                    status_callback("🔄 Retrying with dynamic quality fallback...")
-                fallback_opts = dict(opts)
-                fallback_opts['format'] = 'bestvideo+bestaudio/best'
+                    status_callback("🔄 Retrying with mobile stream engine...")
+                tier1_opts = dict(opts)
+                tier1_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'mweb']}}
+                tier1_opts['format'] = tier1_fmt
                 try:
-                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                    with yt_dlp.YoutubeDL(tier1_opts) as ydl:
+                        result = ydl.download([url])
+                    files_after = self._get_files_in_dir(base_dir)
+                    new_files = files_after - files_before
+                except Exception:
+                    pass
+
+            if result != 0:
+                if status_callback:
+                    status_callback("🔄 Retrying with direct progressive stream...")
+                tier2_opts = dict(opts)
+                tier2_opts['extractor_args'] = {'youtube': {'player_client': ['mweb', 'android']}}
+                tier2_opts['format'] = tier2_fmt
+                try:
+                    with yt_dlp.YoutubeDL(tier2_opts) as ydl:
                         result = ydl.download([url])
                     files_after = self._get_files_in_dir(base_dir)
                     new_files = files_after - files_before
@@ -686,14 +762,33 @@ class DownloadManager:
                     files_after = self._get_files_in_dir(base_dir)
                     new_files = files_after - files_before
 
-                    last_err = logger.get_last_error() or f"Code {result}"
-                    if result != 0 and any(token in last_err.lower() for token in ['403', 'requested format', 'unavailable', 'forbidden']):
+                    # Multi-tiered fallback if primary batch item download failed
+                    if result != 0:
+                        is_audio = "Audio Only" in quality
+                        tier1_fmt = 'bestaudio/best' if is_audio else 'bestvideo+bestaudio/best'
+                        tier2_fmt = 'bestaudio/best' if is_audio else 'best[height<=720]/18/22/best'
+
                         if status_callback:
-                            status_callback(f"[{idx}/{self.total_videos}] 🔄 Retrying with dynamic quality fallback...")
-                        fallback_opts = dict(opts)
-                        fallback_opts['format'] = 'bestvideo+bestaudio/best'
+                            status_callback(f"[{idx}/{self.total_videos}] 🔄 Retrying with mobile stream engine...")
+                        tier1_opts = dict(opts)
+                        tier1_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'mweb']}}
+                        tier1_opts['format'] = tier1_fmt
                         try:
-                            with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                            with yt_dlp.YoutubeDL(tier1_opts) as ydl:
+                                result = ydl.download([video_url])
+                            files_after = self._get_files_in_dir(base_dir)
+                            new_files = files_after - files_before
+                        except Exception:
+                            pass
+
+                    if result != 0:
+                        if status_callback:
+                            status_callback(f"[{idx}/{self.total_videos}] 🔄 Retrying with direct progressive stream...")
+                        tier2_opts = dict(opts)
+                        tier2_opts['extractor_args'] = {'youtube': {'player_client': ['mweb', 'android']}}
+                        tier2_opts['format'] = tier2_fmt
+                        try:
+                            with yt_dlp.YoutubeDL(tier2_opts) as ydl:
                                 result = ydl.download([video_url])
                             files_after = self._get_files_in_dir(base_dir)
                             new_files = files_after - files_before
