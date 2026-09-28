@@ -48,3 +48,47 @@ SELECTION_MODES = {
 # Output formats
 VIDEO_FORMATS = ["mp4", "mkv", "webm", "avi"]
 AUDIO_FORMATS = ["mp3", "m4a", "wav", "flac", "opus"]
+
+# Application Settings file & defaults
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+
+DEFAULT_APP_SETTINGS = {
+    "default_quality": "Best Quality",
+    "default_format": "mp4",
+    "default_naming_scheme": "Numbered + Rewrite Title (01 - Cleaned)",
+    "default_custom_prefix": "",
+    "default_download_dir": DEFAULT_DOWNLOAD_DIR,
+    "default_auto_subfolder": True,
+    "default_embed_thumbnail": False,
+    "default_download_subtitles": False,
+    "default_subtitle_lang": "en",
+    "default_speed_limit": "",
+}
+
+
+def load_app_settings():
+    """Load user-defined default settings from settings.json."""
+    import json
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                res = dict(DEFAULT_APP_SETTINGS)
+                if isinstance(data, dict):
+                    res.update(data)
+                return res
+        except Exception:
+            pass
+    return dict(DEFAULT_APP_SETTINGS)
+
+
+def save_app_settings(settings):
+    """Save user-defined default settings to settings.json."""
+    import json
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+

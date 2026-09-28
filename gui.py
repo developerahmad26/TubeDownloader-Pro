@@ -20,6 +20,9 @@ from config import (
     SELECTION_MODES,
     VIDEO_FORMATS,
     AUDIO_FORMATS,
+    DEFAULT_APP_SETTINGS,
+    load_app_settings,
+    save_app_settings,
 )
 from downloader import DownloadManager
 from batch_manager import BatchManager
@@ -158,8 +161,11 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} v{APP_VERSION}")
-        self.geometry("980x820")
-        self.minsize(920, 720)
+        self.geometry("1020x840")
+        self.minsize(940, 720)
+
+        # Load persistent application default settings
+        self.app_settings = load_app_settings()
 
         self.dm = DownloadManager()
         self.batch_manager = BatchManager()
@@ -169,8 +175,11 @@ class App(ctk.CTk):
         self.current_nav_view = "downloads"
         self.current_running_batch_id = None
         self.batch_filter_var = ctk.StringVar(value="All Batches")
+        self.batch_search_var = ctk.StringVar(value="")
         self.schedule_filter_var = ctk.StringVar(value="All Schedules")
+        self.schedule_search_var = ctk.StringVar(value="")
         self._schedule_countdown_labels = {}
+        self._batch_countdown_labels = {}
 
         self._build_ui()
         self._check_system_deps()
@@ -184,22 +193,24 @@ class App(ctk.CTk):
         self.content_container = ctk.CTkFrame(self, fg_color="transparent")
         self.content_container.pack(fill="both", expand=True)
 
-        # 3. Create three distinct view frames
+        # 3. Create four distinct view frames
         self.downloads_view = ctk.CTkScrollableFrame(self.content_container, fg_color="transparent")
         self.batches_view = ctk.CTkFrame(self.content_container, fg_color="transparent")
         self.scheduler_view = ctk.CTkFrame(self.content_container, fg_color="transparent")
+        self.settings_view = ctk.CTkScrollableFrame(self.content_container, fg_color="transparent")
 
         # 4. Build components for each view
         self._build_downloads_view()
         self._build_batches_view()
         self._build_scheduler_view()
+        self._build_settings_view()
 
         # 5. Show default view: Downloads Studio
         self._switch_nav_view("downloads")
 
     def _build_top_nav_bar(self):
-        """Build top navigation header with distinct section switchers."""
-        top_bar = ctk.CTkFrame(self, fg_color="#18191c", corner_radius=0, height=62)
+        """Build top navigation header with 4 distinct studio views."""
+        top_bar = ctk.CTkFrame(self, fg_color="#15171c", corner_radius=0, height=64)
         top_bar.pack(fill="x", side="top", pady=(0, 2))
         top_bar.pack_propagate(False)
 
@@ -216,30 +227,37 @@ class App(ctk.CTk):
             font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
         ).pack(side="left", padx=(8, 0), pady=(3, 0))
 
-        # Center: Segregated Section Switchers
+        # Center: 4 Clean Segregated Studio Nav Buttons
         nav_box = ctk.CTkFrame(top_bar, fg_color="transparent")
         nav_box.pack(side="left", expand=True, pady=8)
 
         self.nav_btn_downloads = ctk.CTkButton(
-            nav_box, text="📹 Downloads Studio", width=175, height=38,
-            font=("Segoe UI", 13, "bold"),
+            nav_box, text="📹 Downloads Studio", width=160, height=38,
+            font=("Segoe UI", 12, "bold"),
             command=lambda: self._switch_nav_view("downloads")
         )
-        self.nav_btn_downloads.pack(side="left", padx=5)
+        self.nav_btn_downloads.pack(side="left", padx=4)
 
         self.nav_btn_batches = ctk.CTkButton(
-            nav_box, text="📁 Batches Studio", width=175, height=38,
-            font=("Segoe UI", 13, "bold"),
+            nav_box, text="📁 Batches Studio", width=150, height=38,
+            font=("Segoe UI", 12, "bold"),
             command=lambda: self._switch_nav_view("batches")
         )
-        self.nav_btn_batches.pack(side="left", padx=5)
+        self.nav_btn_batches.pack(side="left", padx=4)
 
         self.nav_btn_scheduler = ctk.CTkButton(
-            nav_box, text="⏰ Scheduler Studio", width=175, height=38,
-            font=("Segoe UI", 13, "bold"),
+            nav_box, text="⏰ Scheduler Studio", width=160, height=38,
+            font=("Segoe UI", 12, "bold"),
             command=lambda: self._switch_nav_view("scheduler")
         )
-        self.nav_btn_scheduler.pack(side="left", padx=5)
+        self.nav_btn_scheduler.pack(side="left", padx=4)
+
+        self.nav_btn_settings = ctk.CTkButton(
+            nav_box, text="⚙️ Settings", width=135, height=38,
+            font=("Segoe UI", 12, "bold"),
+            command=lambda: self._switch_nav_view("settings")
+        )
+        self.nav_btn_settings.pack(side="left", padx=4)
 
         # Right: Update & Restart
         right_box = ctk.CTkFrame(top_bar, fg_color="transparent")
@@ -258,8 +276,8 @@ class App(ctk.CTk):
 
         active_col = "#1F6AA5"
         active_hover = "#144870"
-        inactive_col = "#2b2d30"
-        inactive_hover = "#3a3d42"
+        inactive_col = "#252830"
+        inactive_hover = "#353942"
 
         self.nav_btn_downloads.configure(
             fg_color=active_col if view_name == "downloads" else inactive_col,
@@ -273,11 +291,16 @@ class App(ctk.CTk):
             fg_color=active_col if view_name == "scheduler" else inactive_col,
             hover_color=active_hover if view_name == "scheduler" else inactive_hover
         )
+        self.nav_btn_settings.configure(
+            fg_color=active_col if view_name == "settings" else inactive_col,
+            hover_color=active_hover if view_name == "settings" else inactive_hover
+        )
 
         # Hide all view containers
         self.downloads_view.pack_forget()
         self.batches_view.pack_forget()
         self.scheduler_view.pack_forget()
+        self.settings_view.pack_forget()
 
         # Display exclusively the selected view
         if view_name == "downloads":
@@ -288,25 +311,30 @@ class App(ctk.CTk):
         elif view_name == "scheduler":
             self.scheduler_view.pack(fill="both", expand=True, padx=15, pady=8)
             self._render_schedules_list()
+        elif view_name == "settings":
+            self.settings_view.pack(fill="both", expand=True, padx=15, pady=8)
+            self._refresh_settings_view()
 
     def _build_downloads_view(self):
-        """Build the dedicated Downloads Studio view (Single, Playlist, Channel, Settings, Progress, Log)."""
-        # Header banner inside downloads view
-        header = ctk.CTkFrame(self.downloads_view, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 6))
+        """Build the dedicated Downloads Studio view with a clear, professional card-based structure."""
+        # ================= Card 1: Media Source & Input =================
+        source_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
+        source_card.pack(fill="x", pady=(0, 10))
 
+        s_head = ctk.CTkFrame(source_card, fg_color="transparent")
+        s_head.pack(fill="x", padx=15, pady=(10, 4))
         ctk.CTkLabel(
-            header, text="📹 Interactive Downloads",
-            font=("Segoe UI", 16, "bold")
+            s_head, text="🔗 Media Source & Video Input",
+            font=("Segoe UI", 14, "bold")
         ).pack(side="left")
         ctk.CTkLabel(
-            header, text="— Download single videos, complete playlists, or full channels",
+            s_head, text="— Select single video, playlist, or full channel",
             font=("Segoe UI", 11), text_color="gray"
-        ).pack(side="left", padx=8, pady=(2, 0))
+        ).pack(side="left", padx=8)
 
-        # Tab View for Single, Playlist, Channel
-        self.tabview = ctk.CTkTabview(self.downloads_view, height=190)
-        self.tabview.pack(fill="x", pady=(0, 10))
+        # Tab View for Single, Playlist, Channel inside Card 1
+        self.tabview = ctk.CTkTabview(source_card, height=185)
+        self.tabview.pack(fill="x", padx=10, pady=(0, 10))
 
         self.tab_single = self.tabview.add("📹 Single Video")
         self.tab_playlist = self.tabview.add("📋 Playlist")
@@ -316,153 +344,172 @@ class App(ctk.CTk):
         self._build_playlist_tab()
         self._build_channel_tab()
 
-        # Download Settings Frame
-        settings_frame = ctk.CTkFrame(self.downloads_view)
-        settings_frame.pack(fill="x", pady=(0, 10))
+        # ================= Card 2: Download Configuration & Storage =================
+        config_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
+        config_card.pack(fill="x", pady=(0, 10))
 
+        c_head = ctk.CTkFrame(config_card, fg_color="transparent")
+        c_head.pack(fill="x", padx=15, pady=(10, 4))
         ctk.CTkLabel(
-            settings_frame, text="⚙️  Download Settings",
+            c_head, text="⚙️ Download Configuration & Preferences",
             font=("Segoe UI", 14, "bold")
-        ).pack(anchor="w", padx=15, pady=(10, 5))
-
-        sg = ctk.CTkFrame(settings_frame, fg_color="transparent")
-        sg.pack(fill="x", padx=15, pady=(0, 5))
-
-        # Row 0: Quality + Format
-        ctk.CTkLabel(sg, text="Quality:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.quality_var = ctk.StringVar(value="Best Quality")
-        ctk.CTkOptionMenu(
-            sg, variable=self.quality_var,
-            values=list(QUALITY_OPTIONS.keys()), width=200
-        ).grid(row=0, column=1, padx=5, pady=5)
-
-        ctk.CTkLabel(sg, text="Format:").grid(row=0, column=2, sticky="w", padx=(20, 5), pady=5)
-        self.format_var = ctk.StringVar(value="mp4")
-        ctk.CTkOptionMenu(
-            sg, variable=self.format_var,
-            values=VIDEO_FORMATS + AUDIO_FORMATS, width=100
-        ).grid(row=0, column=3, padx=5, pady=5)
-
-        # Row 1: Naming + Rules Button + Custom Prefix
-        ctk.CTkLabel(sg, text="Naming:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.naming_var = ctk.StringVar(value="Numbered + Rewrite Title (01 - Cleaned)")
-        naming_box = ctk.CTkFrame(sg, fg_color="transparent")
-        naming_box.grid(row=1, column=1, padx=5, pady=5, sticky="w")
-
-        ctk.CTkOptionMenu(
-            naming_box, variable=self.naming_var,
-            values=list(NAMING_SCHEMES.keys()), width=230
         ).pack(side="left")
 
-        ctk.CTkButton(
-            naming_box, text="⚙️ Rules", width=65, height=28,
-            fg_color="#495057", hover_color="#343a40",
-            font=("Segoe UI", 11, "bold"),
-            command=self._open_title_rules_dialog
-        ).pack(side="left", padx=(5, 0))
+        # Two-column layout inside config card
+        columns_frame = ctk.CTkFrame(config_card, fg_color="transparent")
+        columns_frame.pack(fill="x", padx=15, pady=(0, 6))
 
-        ctk.CTkLabel(sg, text="Custom Prefix:").grid(row=1, column=2, sticky="w", padx=(20, 5), pady=5)
-        self.prefix_entry = ctk.CTkEntry(sg, placeholder_text="e.g., MyVideo", width=150)
-        self.prefix_entry.grid(row=1, column=3, padx=5, pady=5)
-        self._attach_entry_context_menu(self.prefix_entry)
+        # Col 1: Format & Stream settings
+        col1 = ctk.CTkFrame(columns_frame, fg_color="#1c1f26", corner_radius=6)
+        col1.pack(side="left", fill="both", expand=True, padx=(0, 6), pady=4)
 
-        # Row 2: Speed limit + Subtitle language
-        ctk.CTkLabel(sg, text="Speed Limit:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
-        speed_frame = ctk.CTkFrame(sg, fg_color="transparent")
-        speed_frame.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-        self.speed_entry = ctk.CTkEntry(speed_frame, placeholder_text="0", width=100)
-        self.speed_entry.pack(side="left")
-        self._attach_entry_context_menu(self.speed_entry)
-        ctk.CTkLabel(speed_frame, text="KB/s (0=unlimited)", text_color="gray").pack(side="left", padx=5)
+        ctk.CTkLabel(col1, text="Stream & Format", font=("Segoe UI", 12, "bold"), text_color="#17a2b8").pack(anchor="w", padx=12, pady=(8, 4))
 
-        ctk.CTkLabel(sg, text="Sub Language:").grid(row=2, column=2, sticky="w", padx=(20, 5), pady=5)
-        self.subtitle_lang_entry = ctk.CTkEntry(sg, placeholder_text="en", width=150)
-        self.subtitle_lang_entry.insert(0, "en")
-        self.subtitle_lang_entry.grid(row=2, column=3, padx=5, pady=5)
+        row_qf = ctk.CTkFrame(col1, fg_color="transparent")
+        row_qf.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(row_qf, text="Quality:", width=60, anchor="w").pack(side="left")
+        self.quality_var = ctk.StringVar(value=self.app_settings.get("default_quality", "Best Quality"))
+        ctk.CTkOptionMenu(row_qf, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=180).pack(side="left", padx=4)
+
+        ctk.CTkLabel(row_qf, text="Format:", width=50, anchor="w").pack(side="left", padx=(10, 0))
+        self.format_var = ctk.StringVar(value=self.app_settings.get("default_format", "mp4"))
+        ctk.CTkOptionMenu(row_qf, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90).pack(side="left", padx=4)
+
+        row_cb1 = ctk.CTkFrame(col1, fg_color="transparent")
+        row_cb1.pack(fill="x", padx=12, pady=(6, 8))
+        self.thumbnail_var = ctk.BooleanVar(value=self.app_settings.get("default_embed_thumbnail", False))
+        ctk.CTkCheckBox(row_cb1, text="🖼️ Embed Thumbnail", variable=self.thumbnail_var).pack(side="left", padx=(0, 10))
+
+        self.subtitle_var = ctk.BooleanVar(value=self.app_settings.get("default_download_subtitles", False))
+        ctk.CTkCheckBox(row_cb1, text="💬 Subtitles", variable=self.subtitle_var).pack(side="left", padx=4)
+        self.subtitle_lang_entry = ctk.CTkEntry(row_cb1, placeholder_text="en", width=50)
+        self.subtitle_lang_entry.insert(0, self.app_settings.get("default_subtitle_lang", "en"))
+        self.subtitle_lang_entry.pack(side="left", padx=4)
         self._attach_entry_context_menu(self.subtitle_lang_entry)
 
-        # Checkboxes row
-        cb_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
-        cb_frame.pack(fill="x", padx=15, pady=(5, 10))
+        # Col 2: Naming & File Organization
+        col2 = ctk.CTkFrame(columns_frame, fg_color="#1c1f26", corner_radius=6)
+        col2.pack(side="right", fill="both", expand=True, padx=(6, 0), pady=4)
 
-        self.thumbnail_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(
-            cb_frame, text="🖼️ Embed Thumbnail", variable=self.thumbnail_var
-        ).pack(side="left", padx=10)
+        ctk.CTkLabel(col2, text="Naming & Organization", font=("Segoe UI", 12, "bold"), text_color="#38bdf8").pack(anchor="w", padx=12, pady=(8, 4))
 
-        self.subtitle_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(
-            cb_frame, text="💬 Download Subtitles", variable=self.subtitle_var
-        ).pack(side="left", padx=10)
+        row_name = ctk.CTkFrame(col2, fg_color="transparent")
+        row_name.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(row_name, text="Naming:", width=60, anchor="w").pack(side="left")
+        self.naming_var = ctk.StringVar(value=self.app_settings.get("default_naming_scheme", "Numbered + Rewrite Title (01 - Cleaned)"))
+        ctk.CTkOptionMenu(row_name, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=215).pack(side="left", padx=4)
+        ctk.CTkButton(
+            row_name, text="⚙️ Rules", width=65, height=28,
+            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 11, "bold"),
+            command=self._open_title_rules_dialog
+        ).pack(side="left", padx=4)
 
-        self.subfolder_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(
-            cb_frame, text="📂 Auto Subfolder (Playlist/Channel name)",
-            variable=self.subfolder_var
-        ).pack(side="left", padx=10)
+        row_pref = ctk.CTkFrame(col2, fg_color="transparent")
+        row_pref.pack(fill="x", padx=12, pady=(4, 8))
+        ctk.CTkLabel(row_pref, text="Prefix:", width=50, anchor="w").pack(side="left")
+        self.prefix_entry = ctk.CTkEntry(row_pref, placeholder_text="e.g. MyVideo", width=120)
+        self.prefix_entry.insert(0, self.app_settings.get("default_custom_prefix", ""))
+        self.prefix_entry.pack(side="left", padx=4)
+        self._attach_entry_context_menu(self.prefix_entry)
 
-        # Cookies row (VPS / Anti-Bot)
-        cookie_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
-        cookie_frame.pack(fill="x", padx=15, pady=(0, 10))
+        self.subfolder_var = ctk.BooleanVar(value=self.app_settings.get("default_auto_subfolder", True))
+        ctk.CTkCheckBox(row_pref, text="📂 Auto Subfolder", variable=self.subfolder_var).pack(side="left", padx=(10, 0))
+
+        # Bottom Strip inside config card: Save Directory & Cookies row
+        storage_strip = ctk.CTkFrame(config_card, fg_color="transparent")
+        storage_strip.pack(fill="x", padx=15, pady=(2, 10))
+
+        # Save Directory row
+        dir_row = ctk.CTkFrame(storage_strip, fg_color="transparent")
+        dir_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(dir_row, text="📁 Save Directory:", font=("Segoe UI", 12, "bold"), width=120, anchor="w").pack(side="left")
+        self.dir_var = ctk.StringVar(value=self.app_settings.get("default_download_dir", DEFAULT_DOWNLOAD_DIR))
+        self.dir_entry = ctk.CTkEntry(dir_row, textvariable=self.dir_var, width=520)
+        self.dir_entry.pack(side="left", padx=5, fill="x", expand=True)
+        self._attach_entry_context_menu(self.dir_entry)
+        ctk.CTkButton(dir_row, text="Browse", width=80, command=self._browse_dir).pack(side="left", padx=3)
+        ctk.CTkButton(dir_row, text="📂 Open", width=80, command=self._open_download_dir).pack(side="left", padx=3)
+
+        # Cookies & Speed limit row
+        extra_row = ctk.CTkFrame(storage_strip, fg_color="transparent")
+        extra_row.pack(fill="x", pady=(6, 0))
 
         ctk.CTkButton(
-            cookie_frame,
-            text="🍪 Manage YouTube Cookies",
-            width=210,
-            command=self._open_cookie_manager,
-            fg_color="#1F6AA5",
-            hover_color="#144870"
-        ).pack(side="left", padx=(0, 10))
+            extra_row, text="🍪 YouTube Cookies", width=160, height=28,
+            command=self._open_cookie_manager, fg_color="#1F6AA5", hover_color="#144870"
+        ).pack(side="left", padx=(0, 8))
 
         self.cookie_status_label = ctk.CTkLabel(
-            cookie_frame,
-            text=self._get_cookie_status_text(),
-            font=("Segoe UI", 11),
-            text_color="#2ECC71" if self._has_cookies() else "#F39C12"
+            extra_row, text=self._get_cookie_status_text(),
+            font=("Segoe UI", 11), text_color="#2ECC71" if self._has_cookies() else "#F39C12"
         )
         self.cookie_status_label.pack(side="left")
 
-        # Save To Directory Frame
-        dir_frame = ctk.CTkFrame(self.downloads_view)
-        dir_frame.pack(fill="x", pady=(0, 10))
+        speed_box = ctk.CTkFrame(extra_row, fg_color="transparent")
+        speed_box.pack(side="right")
+        ctk.CTkLabel(speed_box, text="Speed Limit:").pack(side="left", padx=4)
+        self.speed_entry = ctk.CTkEntry(speed_box, placeholder_text="0", width=80)
+        self.speed_entry.insert(0, self.app_settings.get("default_speed_limit", ""))
+        self.speed_entry.pack(side="left")
+        self._attach_entry_context_menu(self.speed_entry)
+        ctk.CTkLabel(speed_box, text="KB/s (0=unlimited)", text_color="gray").pack(side="left", padx=4)
 
-        dir_inner = ctk.CTkFrame(dir_frame, fg_color="transparent")
-        dir_inner.pack(fill="x", padx=15, pady=10)
+        # ================= Card 3: Action & Live Progress Center =================
+        action_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
+        action_card.pack(fill="x", pady=(0, 10))
 
-        ctk.CTkLabel(
-            dir_inner, text="📁 Save To:",
-            font=("Segoe UI", 13, "bold")
-        ).pack(side="left", padx=(0, 10))
+        act_inner = ctk.CTkFrame(action_card, fg_color="transparent")
+        act_inner.pack(fill="x", padx=15, pady=12)
 
-        self.dir_var = ctk.StringVar(value=DEFAULT_DOWNLOAD_DIR)
-        self.dir_entry = ctk.CTkEntry(
-            dir_inner, textvariable=self.dir_var, width=420
+        # Primary Buttons Row
+        btns_row = ctk.CTkFrame(act_inner, fg_color="transparent")
+        btns_row.pack(fill="x", pady=(0, 8))
+
+        self.download_btn = ctk.CTkButton(
+            btns_row, text="⬇️  Start Download", width=190, height=46,
+            font=("Segoe UI", 15, "bold"),
+            fg_color="#28a745", hover_color="#218838",
+            command=self._start_download
         )
-        self.dir_entry.pack(side="left", padx=5)
-        self._attach_entry_context_menu(self.dir_entry)
+        self.download_btn.pack(side="left", padx=(0, 6))
 
-        ctk.CTkButton(
-            dir_inner, text="Browse", width=80, command=self._browse_dir
-        ).pack(side="left", padx=5)
+        self.cancel_btn = ctk.CTkButton(
+            btns_row, text="❌ Cancel", width=110, height=46,
+            font=("Segoe UI", 13, "bold"),
+            fg_color="#dc3545", hover_color="#c82333",
+            command=self._cancel_download, state="disabled"
+        )
+        self.cancel_btn.pack(side="left", padx=4)
 
-        ctk.CTkButton(
-            dir_inner, text="📂 Open", width=80, command=self._open_download_dir
-        ).pack(side="left", padx=5)
+        self.save_batch_btn = ctk.CTkButton(
+            btns_row, text="💾 Save as Batch", width=150, height=46,
+            font=("Segoe UI", 13, "bold"),
+            fg_color="#17a2b8", hover_color="#138496",
+            command=self._save_current_as_batch
+        )
+        self.save_batch_btn.pack(side="left", padx=4)
 
-        # Progress Frame
-        progress_frame = ctk.CTkFrame(self.downloads_view)
-        progress_frame.pack(fill="x", pady=(0, 10))
+        self.schedule_btn = ctk.CTkButton(
+            btns_row, text="⏰ Schedule Setup", width=150, height=46,
+            font=("Segoe UI", 13, "bold"),
+            fg_color="#6f42c1", hover_color="#59359a",
+            command=self._schedule_current_download
+        )
+        self.schedule_btn.pack(side="left", padx=4)
 
-        prog_inner = ctk.CTkFrame(progress_frame, fg_color="transparent")
-        prog_inner.pack(fill="x", padx=15, pady=10)
+        self.counter_label = ctk.CTkLabel(
+            btns_row, text="", font=("Segoe UI", 12, "bold"), text_color="#17a2b8"
+        )
+        self.counter_label.pack(side="right", padx=6)
 
+        # Status & Progress Bar Row
         self.status_label = ctk.CTkLabel(
-            prog_inner, text="⏳ Ready to download",
-            font=("Segoe UI", 12), text_color="#aaaaaa"
+            act_inner, text="⏳ Ready to download",
+            font=("Segoe UI", 12), text_color="#cccccc"
         )
-        self.status_label.pack(anchor="w", pady=(0, 5))
+        self.status_label.pack(anchor="w", pady=(2, 4))
 
-        bar_frame = ctk.CTkFrame(prog_inner, fg_color="transparent")
+        bar_frame = ctk.CTkFrame(act_inner, fg_color="transparent")
         bar_frame.pack(fill="x")
 
         self.progress_bar = ctk.CTkProgressBar(bar_frame, height=22)
@@ -474,55 +521,14 @@ class App(ctk.CTk):
         )
         self.progress_percent.pack(side="right", padx=(10, 0))
 
-        # Action Buttons Frame
-        action_frame = ctk.CTkFrame(self.downloads_view, fg_color="transparent")
-        action_frame.pack(fill="x", pady=(0, 10))
+        # ================= Card 4: Activity Console =================
+        log_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
+        log_card.pack(fill="x", pady=(0, 5))
 
-        self.download_btn = ctk.CTkButton(
-            action_frame, text="⬇️  Start Download", width=180, height=48,
-            font=("Segoe UI", 15, "bold"),
-            fg_color="#28a745", hover_color="#218838",
-            command=self._start_download
-        )
-        self.download_btn.pack(side="left", padx=(10, 5))
-
-        self.cancel_btn = ctk.CTkButton(
-            action_frame, text="❌ Cancel", width=110, height=48,
-            font=("Segoe UI", 14),
-            fg_color="#dc3545", hover_color="#c82333",
-            command=self._cancel_download, state="disabled"
-        )
-        self.cancel_btn.pack(side="left", padx=5)
-
-        self.save_batch_btn = ctk.CTkButton(
-            action_frame, text="💾 Save as Batch", width=145, height=48,
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#17a2b8", hover_color="#138496",
-            command=self._save_current_as_batch
-        )
-        self.save_batch_btn.pack(side="left", padx=5)
-
-        self.schedule_btn = ctk.CTkButton(
-            action_frame, text="⏰ Schedule", width=125, height=48,
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#6f42c1", hover_color="#59359a",
-            command=self._schedule_current_download
-        )
-        self.schedule_btn.pack(side="left", padx=5)
-
-        self.counter_label = ctk.CTkLabel(
-            action_frame, text="", font=("Segoe UI", 12)
-        )
-        self.counter_label.pack(side="right", padx=15)
-
-        # Download Log Frame
-        log_frame = ctk.CTkFrame(self.downloads_view)
-        log_frame.pack(fill="x", pady=(0, 5))
-
-        log_head = ctk.CTkFrame(log_frame, fg_color="transparent")
+        log_head = ctk.CTkFrame(log_card, fg_color="transparent")
         log_head.pack(fill="x", padx=15, pady=(8, 4))
         ctk.CTkLabel(
-            log_head, text="📝 Download Log",
+            log_head, text="📝 Download Console Activity",
             font=("Segoe UI", 13, "bold")
         ).pack(side="left")
 
@@ -532,7 +538,7 @@ class App(ctk.CTk):
             command=self._clear_download_log
         ).pack(side="right")
 
-        self.log_text = ctk.CTkTextbox(log_frame, height=130, font=("Consolas", 11))
+        self.log_text = ctk.CTkTextbox(log_card, height=125, font=("Consolas", 11))
         self.log_text.pack(fill="x", padx=15, pady=(0, 10))
         self.log_text.configure(state="disabled")
         self._attach_textbox_context_menu(self.log_text)
@@ -698,6 +704,18 @@ class App(ctk.CTk):
 
     # ==================== Batches Studio View ====================
 
+    def _get_active_schedule_for_batch(self, batch_id):
+        """Check if this batch is scheduled to run and return the active schedule job."""
+        try:
+            for job in self.scheduler.get_all():
+                if job.get("status") == "Pending" and job.get("job_type") == "batch":
+                    tdata = job.get("target_data", {})
+                    if tdata.get("id") == batch_id:
+                        return job
+        except Exception:
+            pass
+        return None
+
     def _build_batches_view(self):
         """Build the dedicated full-screen Batches Studio view."""
         # Top Header Bar
@@ -736,40 +754,45 @@ class App(ctk.CTk):
             command=self._clear_completed_batches
         ).pack(side="left", padx=4)
 
-        # Metrics and Filter Bar
-        stats_bar = ctk.CTkFrame(self.batches_view)
-        stats_bar.pack(fill="x", pady=(0, 8))
+        # Search Bar & Filter & Metrics Row
+        control_bar = ctk.CTkFrame(self.batches_view, corner_radius=6)
+        control_bar.pack(fill="x", pady=(0, 8))
 
-        stats_inner = ctk.CTkFrame(stats_bar, fg_color="transparent")
-        stats_inner.pack(fill="x", padx=12, pady=6)
+        ctrl_inner = ctk.CTkFrame(control_bar, fg_color="transparent")
+        ctrl_inner.pack(fill="x", padx=12, pady=6)
 
-        self.batch_stat_total = ctk.CTkLabel(
-            stats_inner, text="📦 Total: 0", font=("Segoe UI", 12, "bold")
+        # Real-time search entry
+        self.batch_search_entry = ctk.CTkEntry(
+            ctrl_inner, textvariable=self.batch_search_var,
+            placeholder_text="🔍 Search batch by name, URL, or #01...", width=320, height=32
         )
-        self.batch_stat_total.pack(side="left", padx=(0, 15))
+        self.batch_search_entry.pack(side="left", padx=(0, 10))
+        self._attach_entry_context_menu(self.batch_search_entry)
+        self.batch_search_var.trace_add("write", lambda *_: self._render_batches_list())
 
-        self.batch_stat_ready = ctk.CTkLabel(
-            stats_inner, text="⏳ Ready: 0", font=("Segoe UI", 12, "bold"), text_color="#17a2b8"
-        )
-        self.batch_stat_ready.pack(side="left", padx=10)
+        # Metric Pills
+        self.batch_stat_total = ctk.CTkLabel(ctrl_inner, text="📦 Total: 0", font=("Segoe UI", 11, "bold"))
+        self.batch_stat_total.pack(side="left", padx=6)
 
-        self.batch_stat_running = ctk.CTkLabel(
-            stats_inner, text="🚀 Running: 0", font=("Segoe UI", 12, "bold"), text_color="#f39c12"
-        )
-        self.batch_stat_running.pack(side="left", padx=10)
+        self.batch_stat_ready = ctk.CTkLabel(ctrl_inner, text="⏳ Ready: 0", font=("Segoe UI", 11, "bold"), text_color="#17a2b8")
+        self.batch_stat_ready.pack(side="left", padx=6)
 
-        self.batch_stat_completed = ctk.CTkLabel(
-            stats_inner, text="✅ Completed: 0", font=("Segoe UI", 12, "bold"), text_color="#2ecc71"
-        )
-        self.batch_stat_completed.pack(side="left", padx=10)
+        self.batch_stat_scheduled = ctk.CTkLabel(ctrl_inner, text="⏰ Scheduled: 0", font=("Segoe UI", 11, "bold"), text_color="#a855f7")
+        self.batch_stat_scheduled.pack(side="left", padx=6)
 
-        filter_frame = ctk.CTkFrame(stats_inner, fg_color="transparent")
-        filter_frame.pack(side="right")
+        self.batch_stat_running = ctk.CTkLabel(ctrl_inner, text="🚀 Running: 0", font=("Segoe UI", 11, "bold"), text_color="#f39c12")
+        self.batch_stat_running.pack(side="left", padx=6)
 
-        ctk.CTkLabel(filter_frame, text="Filter:", font=("Segoe UI", 11)).pack(side="left", padx=5)
+        self.batch_stat_completed = ctk.CTkLabel(ctrl_inner, text="✅ Completed: 0", font=("Segoe UI", 11, "bold"), text_color="#2ecc71")
+        self.batch_stat_completed.pack(side="left", padx=6)
+
+        # Filter dropdown
+        filter_box = ctk.CTkFrame(ctrl_inner, fg_color="transparent")
+        filter_box.pack(side="right")
+        ctk.CTkLabel(filter_box, text="Filter:").pack(side="left", padx=4)
         ctk.CTkOptionMenu(
-            filter_frame, variable=self.batch_filter_var,
-            values=["All Batches", "Ready", "Running", "Completed", "Failed"],
+            filter_box, variable=self.batch_filter_var,
+            values=["All Batches", "Ready", "Scheduled", "Running", "Completed", "Failed"],
             width=130, height=28,
             command=lambda _: self._render_batches_list()
         ).pack(side="left")
@@ -817,33 +840,74 @@ class App(ctk.CTk):
             self.batch_log_text.configure(state="disabled")
 
     def _render_batches_list(self):
-        """Render all saved batch cards in the dedicated Batches Studio."""
+        """Render all saved batch cards with numbering, status badges, and scheduled banners."""
         for widget in self.batches_scroll.winfo_children():
             widget.destroy()
 
-        batches = self.batch_manager.get_all()
-        total_count = len(batches)
-        ready_count = sum(1 for b in batches if b.get("status") == "Ready")
-        running_count = sum(1 for b in batches if b.get("status") == "Running")
-        comp_count = sum(1 for b in batches if b.get("status") == "Completed")
+        self._batch_countdown_labels.clear()
+
+        all_batches = self.batch_manager.get_all()
+        total_count = len(all_batches)
+
+        # Count states including active schedules
+        sched_count = sum(1 for b in all_batches if self._get_active_schedule_for_batch(b.get("id")) is not None)
+        running_count = sum(1 for b in all_batches if self.current_running_batch_id == b.get("id") or b.get("status") == "Running")
+        comp_count = sum(1 for b in all_batches if b.get("status") == "Completed" and not self._get_active_schedule_for_batch(b.get("id")))
+        ready_count = total_count - sched_count - running_count - comp_count
+        if ready_count < 0:
+            ready_count = 0
 
         if hasattr(self, "batch_stat_total"):
             self.batch_stat_total.configure(text=f"📦 Total: {total_count}")
             self.batch_stat_ready.configure(text=f"⏳ Ready: {ready_count}")
+            self.batch_stat_scheduled.configure(text=f"⏰ Scheduled: {sched_count}")
             self.batch_stat_running.configure(text=f"🚀 Running: {running_count}")
             self.batch_stat_completed.configure(text=f"✅ Completed: {comp_count}")
 
-        # Filter
+        # Filter by status
         selected_filter = self.batch_filter_var.get()
-        if selected_filter != "All Batches":
-            batches = [b for b in batches if b.get("status") == selected_filter]
+        filtered = []
+        for b in all_batches:
+            active_sched = self._get_active_schedule_for_batch(b.get("id"))
+            is_running = (self.current_running_batch_id == b.get("id") or b.get("status") == "Running")
+            is_comp = (b.get("status") == "Completed" and not active_sched)
 
-        if not batches:
+            if selected_filter == "All Batches":
+                filtered.append(b)
+            elif selected_filter == "Scheduled" and active_sched is not None:
+                filtered.append(b)
+            elif selected_filter == "Running" and is_running:
+                filtered.append(b)
+            elif selected_filter == "Completed" and is_comp:
+                filtered.append(b)
+            elif selected_filter == "Ready" and not active_sched and not is_running and not is_comp:
+                filtered.append(b)
+            elif selected_filter == "Failed" and b.get("status") == "Failed":
+                filtered.append(b)
+
+        # Filter by search text
+        search_query = self.batch_search_var.get().strip().lower()
+        if search_query:
+            matched = []
+            for i, b in enumerate(filtered):
+                num_tag = f"#{i+1:02d}".lower()
+                num_raw = str(i+1)
+                name = b.get("name", "").lower()
+                url = b.get("url", "").lower()
+                btype = b.get("type", "").lower()
+                quality = b.get("quality", "").lower()
+                if (search_query in num_tag or search_query in num_raw or
+                    search_query in name or search_query in url or
+                    search_query in btype or search_query in quality):
+                    matched.append(b)
+            filtered = matched
+
+        if not filtered:
             empty_frame = ctk.CTkFrame(self.batches_scroll, fg_color="transparent")
             empty_frame.pack(fill="both", expand=True, pady=40)
             ctk.CTkLabel(
                 empty_frame,
-                text="📁 No download batches found in this view.\nConfigure any download in 'Downloads Studio' and click '💾 Save as Batch'!",
+                text="📁 No download batches matching your search/filter.\nSet up any download in 'Downloads Studio' and click '💾 Save as Batch'!",
                 font=("Segoe UI", 13), text_color="gray", justify="center"
             ).pack(pady=(0, 10))
             ctk.CTkButton(
@@ -853,7 +917,7 @@ class App(ctk.CTk):
             ).pack()
             return
 
-        for b in batches:
+        for idx, b in enumerate(filtered, start=1):
             bid = b.get("id")
             name = b.get("name", "Untitled Batch")
             btype = b.get("type", "channel")
@@ -862,83 +926,190 @@ class App(ctk.CTk):
             fmt = b.get("format", "mp4")
             naming = b.get("naming_scheme", "title")
             sel_val = b.get("selection_value", "")
-            status = b.get("status", "Ready")
+            prefix = b.get("custom_prefix", "")
+            subfolder = b.get("subfolder", "")
             last_run = b.get("last_run", "")
 
-            type_icons = {"single": "📹 Single", "playlist": "📋 Playlist", "channel": "📺 Channel"}
+            # Check if this batch is currently scheduled
+            active_sched = self._get_active_schedule_for_batch(bid)
+            is_running = (self.current_running_batch_id == bid or b.get("status") == "Running")
+
+            # Outer Card
+            card = ctk.CTkFrame(self.batches_scroll, corner_radius=8, fg_color="#1c1f26", border_width=1, border_color="#2b2f3a")
+            card.pack(fill="x", padx=6, pady=6)
+
+            card_inner = ctk.CTkFrame(card, fg_color="transparent")
+            card_inner.pack(fill="both", expand=True, padx=14, pady=12)
+
+            # Row 1: Number Badge + Title + Type Pill + State Badge
+            row1 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row1.pack(fill="x")
+
+            # Numbering badge (#01, #02...)
+            num_lbl = ctk.CTkLabel(
+                row1, text=f"#{idx:02d}", font=("Segoe UI", 11, "bold"),
+                text_color="#38bdf8", fg_color="#0e2a3b", corner_radius=6, padx=8, pady=3
+            )
+            num_lbl.pack(side="left")
+
+            # Batch Title
+            ctk.CTkLabel(
+                row1, text=name, font=("Segoe UI", 15, "bold"), text_color="#FFFFFF"
+            ).pack(side="left", padx=(10, 8))
+
+            # Type Pill
+            type_icons = {"single": "📹 Single Video", "playlist": "📋 Playlist", "channel": "📺 Channel"}
             type_str = type_icons.get(btype, "🎬 Video")
-
-            card = ctk.CTkFrame(self.batches_scroll)
-            card.pack(fill="x", padx=6, pady=5)
-
-            left = ctk.CTkFrame(card, fg_color="transparent")
-            left.pack(side="left", fill="both", expand=True, padx=12, pady=10)
-
-            title_row = ctk.CTkFrame(left, fg_color="transparent")
-            title_row.pack(fill="x")
             ctk.CTkLabel(
-                title_row, text=name, font=("Segoe UI", 14, "bold")
+                row1, text=type_str, font=("Segoe UI", 10, "bold"),
+                text_color="#17a2b8", fg_color="#14262d", corner_radius=4, padx=6, pady=2
             ).pack(side="left")
-            ctk.CTkLabel(
-                title_row, text=f" [{type_str}]", font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
-            ).pack(side="left", padx=6)
 
-            sub_text = f"🔗 {url[:55]}...  •  ⚙️ {quality} ({fmt})  •  🏷️ {naming}"
+            # Right Status Badge
+            if is_running:
+                status_text = "🚀 RUNNING"
+                st_color = "#f39c12"
+                st_bg = "#3b260e"
+            elif active_sched is not None:
+                status_text = "⏰ SCHEDULED"
+                st_color = "#c084fc"
+                st_bg = "#2e1847"
+            elif b.get("status") == "Completed":
+                status_text = "✅ COMPLETED"
+                st_color = "#2ecc71"
+                st_bg = "#113320"
+            else:
+                status_text = "● READY"
+                st_color = "#17a2b8"
+                st_bg = "#102c33"
+
+            st_pill = ctk.CTkLabel(
+                row1, text=status_text, font=("Segoe UI", 11, "bold"),
+                text_color=st_color, fg_color=st_bg, corner_radius=6, padx=10, pady=4
+            )
+            st_pill.pack(side="right")
+
+            # Row 2: URL with 1-click Copy button
+            row2 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row2.pack(fill="x", pady=(6, 2))
+
+            ctk.CTkLabel(row2, text=f"🔗 {url}", font=("Segoe UI", 11), text_color="#38bdf8", anchor="w").pack(side="left", fill="x", expand=True)
+            ctk.CTkButton(
+                row2, text="📋 Copy URL", width=75, height=22,
+                fg_color="#2b2d30", hover_color="#3a3d42", font=("Segoe UI", 10),
+                command=lambda u=url: self._copy_text_to_clipboard(u)
+            ).pack(side="right")
+
+            # Row 3: Metadata Badges (Quality, Format, Naming, Prefix, Range)
+            row3 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row3.pack(fill="x", pady=(2, 6))
+
+            info_tags = [f"⚙️ {quality}", f"📦 {fmt.upper()}", f"🏷️ {naming}"]
+            if prefix:
+                info_tags.append(f"Prefix: '{prefix}'")
             if sel_val:
-                sub_text += f"  •  Range: {sel_val}"
-            if last_run:
-                sub_text += f"  •  Last run: {last_run}"
-            ctk.CTkLabel(
-                left, text=sub_text, font=("Segoe UI", 10), text_color="#a0a0a0", anchor="w"
-            ).pack(fill="x", pady=(3, 0))
+                info_tags.append(f"Range: {sel_val}")
+            if subfolder:
+                info_tags.append(f"Folder: {subfolder}")
 
-            # If running, show inline progress
-            if self.current_running_batch_id == bid:
-                run_bar = ctk.CTkProgressBar(left, height=8)
-                run_bar.pack(fill="x", pady=(6, 0))
+            ctk.CTkLabel(
+                row3, text="  •  ".join(info_tags), font=("Segoe UI", 10), text_color="#a0a0a0", anchor="w"
+            ).pack(side="left")
+
+            if last_run and not active_sched and not is_running:
+                ctk.CTkLabel(
+                    row3, text=f"Last run: {last_run}", font=("Segoe UI", 10), text_color="#718096"
+                ).pack(side="right")
+
+            # SCHEDULED ALERT BANNER (Prominently shows when batch is scheduled)
+            if active_sched:
+                sched_run_at = active_sched.get("run_at", "")
+                sched_cd = self.scheduler.get_countdown(sched_run_at)
+                is_daily = active_sched.get("repeat_daily", False)
+
+                sched_banner = ctk.CTkFrame(card_inner, fg_color="#231538", corner_radius=6, border_width=1, border_color="#6f42c1")
+                sched_banner.pack(fill="x", pady=(4, 6))
+
+                sb_inner = ctk.CTkFrame(sched_banner, fg_color="transparent")
+                sb_inner.pack(fill="x", padx=10, pady=6)
+
+                ctk.CTkLabel(
+                    sb_inner, text="⏰ SCHEDULED RUN:",
+                    font=("Segoe UI", 11, "bold"), text_color="#e9d5ff"
+                ).pack(side="left")
+
+                ctk.CTkLabel(
+                    sb_inner, text=f"{sched_run_at}",
+                    font=("Segoe UI", 11, "bold"), text_color="#FFFFFF"
+                ).pack(side="left", padx=6)
+
+                cd_disp = ctk.CTkLabel(
+                    sb_inner, text=f"⏳ Starts In: {sched_cd}",
+                    font=("Segoe UI", 11, "bold"), text_color="#00d2ff"
+                )
+                cd_disp.pack(side="left", padx=10)
+                self._batch_countdown_labels[bid] = (cd_disp, sched_run_at)
+
+                if is_daily:
+                    ctk.CTkLabel(
+                        sb_inner, text="🔁 DAILY RECURRING",
+                        font=("Segoe UI", 9, "bold"), text_color="#2ecc71", fg_color="#143322", corner_radius=4, padx=6, pady=2
+                    ).pack(side="right")
+
+            # RUNNING INLINE PROGRESS (If running)
+            if is_running:
+                prog_box = ctk.CTkFrame(card_inner, fg_color="#2a1e0c", corner_radius=6)
+                prog_box.pack(fill="x", pady=(4, 6))
+                pb_inner = ctk.CTkFrame(prog_box, fg_color="transparent")
+                pb_inner.pack(fill="x", padx=10, pady=6)
+
+                ctk.CTkLabel(pb_inner, text="🚀 Downloading...", font=("Segoe UI", 11, "bold"), text_color="#f39c12").pack(side="left")
+                run_bar = ctk.CTkProgressBar(pb_inner, height=12)
+                run_bar.pack(side="left", fill="x", expand=True, padx=10)
                 run_bar.set(self.progress_bar.get())
 
-            right = ctk.CTkFrame(card, fg_color="transparent")
-            right.pack(side="right", padx=12, pady=10)
+                pct_txt = self.progress_percent.cget("text")
+                ctk.CTkLabel(pb_inner, text=pct_txt, font=("Segoe UI", 11, "bold"), text_color="#f39c12").pack(side="right")
 
-            status_colors = {
-                "Ready": "#17a2b8",
-                "Running": "#f39c12",
-                "Completed": "#2ecc71",
-                "Failed": "#e74c3c"
-            }
-            col = status_colors.get(status, "gray")
-            ctk.CTkLabel(
-                right, text=f"● {status}", font=("Segoe UI", 12, "bold"), text_color=col, width=85
-            ).pack(side="left", padx=5)
+            # Row 4: Action Buttons Bar
+            row4 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row4.pack(fill="x", pady=(6, 0))
 
             ctk.CTkButton(
-                right, text="▶️ Run Now", width=85, height=30,
+                row4, text="▶️ Run Now", width=95, height=30,
                 fg_color="#28a745", hover_color="#218838", font=("Segoe UI", 11, "bold"),
                 command=lambda b_item=b: self._run_batch(b_item)
-            ).pack(side="left", padx=3)
+            ).pack(side="left", padx=(0, 4))
 
             ctk.CTkButton(
-                right, text="⏰ Schedule", width=85, height=30,
+                row4, text="⏰ Schedule", width=95, height=30,
                 fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 11, "bold"),
                 command=lambda b_item=b: self._open_schedule_dialog(
                     target_name=b_item.get("name"),
                     target_type="batch",
                     target_data=b_item
                 )
-            ).pack(side="left", padx=3)
+            ).pack(side="left", padx=4)
 
             ctk.CTkButton(
-                right, text="✏️ Edit", width=65, height=30,
+                row4, text="✏️ Edit Batch", width=85, height=30,
                 fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 11),
                 command=lambda b_item=b: self._edit_batch(b_item)
-            ).pack(side="left", padx=3)
+            ).pack(side="left", padx=4)
 
             ctk.CTkButton(
-                right, text="🗑️", width=35, height=30,
-                fg_color="#dc3545", hover_color="#c82333",
+                row4, text="🗑️ Delete", width=75, height=30,
+                fg_color="#dc3545", hover_color="#c82333", font=("Segoe UI", 11),
                 command=lambda bid_val=bid: self._delete_batch(bid_val)
-            ).pack(side="left", padx=3)
+            ).pack(side="right")
+
+    def _copy_text_to_clipboard(self, text):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self._update_status("📄 URL copied to clipboard!")
+        except Exception:
+            pass
 
     def _edit_batch(self, batch_item):
         """Open batch editor dialog."""
@@ -1020,20 +1191,29 @@ class App(ctk.CTk):
         )
         self.sched_stat_completed.pack(side="left", padx=10)
 
-        # Control and Filter Bar
-        ctrl_bar = ctk.CTkFrame(self.scheduler_view)
+        # Control, Search, and Filter Bar
+        ctrl_bar = ctk.CTkFrame(self.scheduler_view, corner_radius=6)
         ctrl_bar.pack(fill="x", pady=(0, 8))
 
         ctrl_inner = ctk.CTkFrame(ctrl_bar, fg_color="transparent")
         ctrl_inner.pack(fill="x", padx=12, pady=6)
 
-        ctk.CTkLabel(ctrl_inner, text="Filter:", font=("Segoe UI", 11)).pack(side="left", padx=5)
+        # Real-time search entry for scheduler
+        self.schedule_search_entry = ctk.CTkEntry(
+            ctrl_inner, textvariable=self.schedule_search_var,
+            placeholder_text="🔍 Search schedule by task, URL, or #01...", width=320, height=32
+        )
+        self.schedule_search_entry.pack(side="left", padx=(0, 10))
+        self._attach_entry_context_menu(self.schedule_search_entry)
+        self.schedule_search_var.trace_add("write", lambda *_: self._render_schedules_list())
+
+        ctk.CTkLabel(ctrl_inner, text="Filter:", font=("Segoe UI", 11)).pack(side="left", padx=4)
         ctk.CTkOptionMenu(
             ctrl_inner, variable=self.schedule_filter_var,
             values=["All Schedules", "Pending Only", "Recurring Daily", "Completed", "Cancelled"],
             width=150, height=28,
             command=lambda _: self._render_schedules_list()
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         ctk.CTkButton(
             ctrl_inner, text="➕ Schedule Current Setup", width=180, height=30,
@@ -1095,7 +1275,7 @@ class App(ctk.CTk):
             self.scheduler_log_text.configure(state="disabled")
 
     def _render_schedules_list(self):
-        """Render all scheduled jobs in the dedicated Scheduler Studio."""
+        """Render all scheduled jobs in the dedicated Scheduler Studio with numbering and search."""
         for widget in self.schedules_scroll.winfo_children():
             widget.destroy()
 
@@ -1112,7 +1292,7 @@ class App(ctk.CTk):
             self.sched_stat_daily.configure(text=f"🔁 Daily Recurring: {daily_count}")
             self.sched_stat_completed.configure(text=f"✅ Completed: {comp_count}")
 
-        # Filter
+        # Filter by status
         selected_filter = self.schedule_filter_var.get()
         if selected_filter == "Pending Only":
             jobs = [j for j in jobs if j.get("status") == "Pending"]
@@ -1123,12 +1303,27 @@ class App(ctk.CTk):
         elif selected_filter == "Cancelled":
             jobs = [j for j in jobs if j.get("status") in ("Cancelled", "Failed")]
 
+        # Filter by search text
+        search_query = self.schedule_search_var.get().strip().lower()
+        if search_query:
+            matched = []
+            for i, job in enumerate(jobs):
+                num_tag = f"#{i+1:02d}".lower()
+                num_raw = str(i+1)
+                name = job.get("name", "").lower()
+                run_at = job.get("run_at", "").lower()
+                url = job.get("target_data", {}).get("url", "").lower()
+                if (search_query in num_tag or search_query in num_raw or
+                    search_query in name or search_query in run_at or search_query in url):
+                    matched.append(job)
+            jobs = matched
+
         if not jobs:
             empty_frame = ctk.CTkFrame(self.schedules_scroll, fg_color="transparent")
             empty_frame.pack(fill="both", expand=True, pady=40)
             ctk.CTkLabel(
                 empty_frame,
-                text="⏰ No scheduled tasks found in this view.\nSchedule any download or batch to run automatically whenever you want!",
+                text="⏰ No scheduled tasks found matching your filter/search.\nSchedule any download or batch to run automatically whenever you want!",
                 font=("Segoe UI", 13), text_color="gray", justify="center"
             ).pack(pady=(0, 10))
             ctk.CTkButton(
@@ -1138,7 +1333,7 @@ class App(ctk.CTk):
             ).pack()
             return
 
-        for job in jobs:
+        for idx, job in enumerate(jobs, start=1):
             jid = job.get("id")
             name = job.get("name", "Scheduled Download")
             run_at = job.get("run_at", "")
@@ -1148,7 +1343,7 @@ class App(ctk.CTk):
             repeat_daily = job.get("repeat_daily", False)
             countdown = self.scheduler.get_countdown(run_at) if status == "Pending" else status
 
-            card = ctk.CTkFrame(self.schedules_scroll)
+            card = ctk.CTkFrame(self.schedules_scroll, corner_radius=8, fg_color="#1c1f26", border_width=1, border_color="#2b2f3a")
             card.pack(fill="x", padx=6, pady=5)
 
             left = ctk.CTkFrame(card, fg_color="transparent")
@@ -1156,10 +1351,17 @@ class App(ctk.CTk):
 
             title_row = ctk.CTkFrame(left, fg_color="transparent")
             title_row.pack(fill="x")
-            ctk.CTkLabel(title_row, text=name, font=("Segoe UI", 14, "bold")).pack(side="left")
+
+            # Numbering badge
+            ctk.CTkLabel(
+                title_row, text=f"#{idx:02d}", font=("Segoe UI", 11, "bold"),
+                text_color="#c084fc", fg_color="#26173a", corner_radius=6, padx=8, pady=3
+            ).pack(side="left")
+
+            ctk.CTkLabel(title_row, text=name, font=("Segoe UI", 14, "bold")).pack(side="left", padx=(10, 6))
             ctk.CTkLabel(
                 title_row, text=f" [{jtype.upper()}]", font=("Segoe UI", 11, "bold"), text_color="#3498DB"
-            ).pack(side="left", padx=6)
+            ).pack(side="left", padx=4)
 
             if repeat_daily:
                 r_badge = ctk.CTkLabel(
@@ -1265,8 +1467,241 @@ class App(ctk.CTk):
             on_scheduled=self._render_schedules_list
         )
 
+    # ==================== Settings Studio View ====================
+
+    def _build_settings_view(self):
+        """Build the dedicated Global Application Settings Studio."""
+        # Top Header Card
+        header_card = ctk.CTkFrame(self.settings_view, corner_radius=8)
+        header_card.pack(fill="x", pady=(0, 10))
+
+        h_inner = ctk.CTkFrame(header_card, fg_color="transparent")
+        h_inner.pack(fill="x", padx=16, pady=12)
+
+        h_left = ctk.CTkFrame(h_inner, fg_color="transparent")
+        h_left.pack(side="left")
+
+        ctk.CTkLabel(
+            h_left, text="⚙️ Global Application & Default Settings",
+            font=("Segoe UI", 18, "bold")
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            h_left, text="Configure global defaults for downloads, directory, anti-bot protection, and title rewrite engine",
+            font=("Segoe UI", 11), text_color="gray"
+        ).pack(anchor="w")
+
+        h_right = ctk.CTkFrame(h_inner, fg_color="transparent")
+        h_right.pack(side="right")
+
+        ctk.CTkButton(
+            h_right, text="💾 Save Default Settings", width=190, height=36,
+            fg_color="#28a745", hover_color="#218838", font=("Segoe UI", 12, "bold"),
+            command=self._save_default_settings
+        ).pack(side="left", padx=4)
+
+        ctk.CTkButton(
+            h_right, text="🔄 Reset Defaults", width=130, height=36,
+            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 11),
+            command=self._reset_default_settings
+        ).pack(side="left", padx=4)
+
+        # Card 1: Download & Storage Defaults
+        card_dir = ctk.CTkFrame(self.settings_view, corner_radius=8)
+        card_dir.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            card_dir, text="📁 Default Storage & File Management",
+            font=("Segoe UI", 14, "bold"), text_color="#38bdf8"
+        ).pack(anchor="w", padx=16, pady=(12, 6))
+
+        d_row1 = ctk.CTkFrame(card_dir, fg_color="transparent")
+        d_row1.pack(fill="x", padx=16, pady=4)
+        ctk.CTkLabel(d_row1, text="Default Save Directory:", width=180, anchor="w", font=("Segoe UI", 12)).pack(side="left")
+        self.set_dir_var = ctk.StringVar(value=self.app_settings.get("default_download_dir", DEFAULT_DOWNLOAD_DIR))
+        self.set_dir_entry = ctk.CTkEntry(d_row1, textvariable=self.set_dir_var, width=450)
+        self.set_dir_entry.pack(side="left", fill="x", expand=True, padx=6)
+        self._attach_entry_context_menu(self.set_dir_entry)
+        ctk.CTkButton(d_row1, text="Browse", width=80, command=self._browse_settings_dir).pack(side="left", padx=4)
+        ctk.CTkButton(d_row1, text="📂 Open", width=80, command=self._open_download_dir).pack(side="left", padx=4)
+
+        d_row2 = ctk.CTkFrame(card_dir, fg_color="transparent")
+        d_row2.pack(fill="x", padx=16, pady=(6, 12))
+        self.set_subfolder_var = ctk.BooleanVar(value=self.app_settings.get("default_auto_subfolder", True))
+        ctk.CTkCheckBox(d_row2, text="📂 Automatically create subfolders for Playlist and Channel names by default", variable=self.set_subfolder_var).pack(side="left")
+
+        # Card 2: Video & Audio Quality Defaults
+        card_stream = ctk.CTkFrame(self.settings_view, corner_radius=8)
+        card_stream.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            card_stream, text="🎬 Default Video & Audio Stream Preferences",
+            font=("Segoe UI", 14, "bold"), text_color="#17a2b8"
+        ).pack(anchor="w", padx=16, pady=(12, 6))
+
+        s_grid = ctk.CTkFrame(card_stream, fg_color="transparent")
+        s_grid.pack(fill="x", padx=16, pady=4)
+
+        ctk.CTkLabel(s_grid, text="Default Quality:", width=120, anchor="w").grid(row=0, column=0, sticky="w", pady=6)
+        self.set_quality_var = ctk.StringVar(value=self.app_settings.get("default_quality", "Best Quality"))
+        ctk.CTkOptionMenu(s_grid, variable=self.set_quality_var, values=list(QUALITY_OPTIONS.keys()), width=220).grid(row=0, column=1, sticky="w", padx=6, pady=6)
+
+        ctk.CTkLabel(s_grid, text="Default Format:", width=110, anchor="w").grid(row=0, column=2, sticky="w", padx=(20, 0), pady=6)
+        self.set_format_var = ctk.StringVar(value=self.app_settings.get("default_format", "mp4"))
+        ctk.CTkOptionMenu(s_grid, variable=self.set_format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=120).grid(row=0, column=3, sticky="w", padx=6, pady=6)
+
+        s_row2 = ctk.CTkFrame(card_stream, fg_color="transparent")
+        s_row2.pack(fill="x", padx=16, pady=6)
+
+        self.set_thumb_var = ctk.BooleanVar(value=self.app_settings.get("default_embed_thumbnail", False))
+        ctk.CTkCheckBox(s_row2, text="🖼️ Embed Thumbnail by default", variable=self.set_thumb_var).pack(side="left", padx=(0, 15))
+
+        self.set_sub_var = ctk.BooleanVar(value=self.app_settings.get("default_download_subtitles", False))
+        ctk.CTkCheckBox(s_row2, text="💬 Download Subtitles by default", variable=self.set_sub_var).pack(side="left", padx=4)
+
+        ctk.CTkLabel(s_row2, text="Language:").pack(side="left", padx=(10, 4))
+        self.set_sub_lang_entry = ctk.CTkEntry(s_row2, width=60)
+        self.set_sub_lang_entry.insert(0, self.app_settings.get("default_subtitle_lang", "en"))
+        self.set_sub_lang_entry.pack(side="left", padx=4)
+        self._attach_entry_context_menu(self.set_sub_lang_entry)
+
+        ctk.CTkLabel(s_row2, text="Speed Limit:").pack(side="left", padx=(20, 4))
+        self.set_speed_entry = ctk.CTkEntry(s_row2, width=80, placeholder_text="0")
+        self.set_speed_entry.insert(0, self.app_settings.get("default_speed_limit", ""))
+        self.set_speed_entry.pack(side="left", padx=4)
+        self._attach_entry_context_menu(self.set_speed_entry)
+        ctk.CTkLabel(s_row2, text="KB/s (0=unlimited)", text_color="gray").pack(side="left", padx=4)
+
+        # Space bottom
+        ctk.CTkFrame(card_stream, height=8, fg_color="transparent").pack()
+
+        # Card 3: Title Rewriting & Naming Defaults
+        card_naming = ctk.CTkFrame(self.settings_view, corner_radius=8)
+        card_naming.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            card_naming, text="🏷️ Default Title Rewriting & File Naming",
+            font=("Segoe UI", 14, "bold"), text_color="#a855f7"
+        ).pack(anchor="w", padx=16, pady=(12, 6))
+
+        n_row1 = ctk.CTkFrame(card_naming, fg_color="transparent")
+        n_row1.pack(fill="x", padx=16, pady=4)
+
+        ctk.CTkLabel(n_row1, text="Default Scheme:", width=120, anchor="w").pack(side="left")
+        self.set_naming_var = ctk.StringVar(value=self.app_settings.get("default_naming_scheme", "Numbered + Rewrite Title (01 - Cleaned)"))
+        ctk.CTkOptionMenu(n_row1, variable=self.set_naming_var, values=list(NAMING_SCHEMES.keys()), width=260).pack(side="left", padx=4)
+
+        ctk.CTkLabel(n_row1, text="Default Prefix:", width=100, anchor="w").pack(side="left", padx=(15, 0))
+        self.set_prefix_entry = ctk.CTkEntry(n_row1, width=150, placeholder_text="e.g. MyVideo")
+        self.set_prefix_entry.insert(0, self.app_settings.get("default_custom_prefix", ""))
+        self.set_prefix_entry.pack(side="left", padx=4)
+        self._attach_entry_context_menu(self.set_prefix_entry)
+
+        n_row2 = ctk.CTkFrame(card_naming, fg_color="transparent")
+        n_row2.pack(fill="x", padx=16, pady=(6, 12))
+
+        ctk.CTkButton(
+            n_row2, text="⚙️ Configure Semantic & AI Title Rewrite Rules", width=320, height=32,
+            fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 11, "bold"),
+            command=self._open_title_rules_dialog
+        ).pack(side="left")
+
+        # Card 4: Anti-Bot & Cookies Protection (VPS Safe)
+        card_cookies = ctk.CTkFrame(self.settings_view, corner_radius=8)
+        card_cookies.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            card_cookies, text="🍪 YouTube Anti-Bot & Cookies Protection (VPS / Datacenter)",
+            font=("Segoe UI", 14, "bold"), text_color="#2ecc71"
+        ).pack(anchor="w", padx=16, pady=(12, 6))
+
+        c_row = ctk.CTkFrame(card_cookies, fg_color="transparent")
+        c_row.pack(fill="x", padx=16, pady=(4, 12))
+
+        ctk.CTkButton(
+            c_row, text="🍪 Open YouTube Cookies Manager", width=240, height=32,
+            fg_color="#1F6AA5", hover_color="#144870", font=("Segoe UI", 11, "bold"),
+            command=self._open_cookie_manager
+        ).pack(side="left", padx=(0, 10))
+
+        self.set_cookie_status_label = ctk.CTkLabel(
+            c_row, text=self._get_cookie_status_text(), font=("Segoe UI", 11),
+            text_color="#2ECC71" if self._has_cookies() else "#F39C12"
+        )
+        self.set_cookie_status_label.pack(side="left")
+
+    def _browse_settings_dir(self):
+        d = filedialog.askdirectory()
+        if d:
+            self.set_dir_var.set(d)
+
+    def _save_default_settings(self):
+        """Save settings to settings.json and synchronize with live Downloads Studio."""
+        new_settings = {
+            "default_quality": self.set_quality_var.get(),
+            "default_format": self.set_format_var.get(),
+            "default_naming_scheme": self.set_naming_var.get(),
+            "default_custom_prefix": self.set_prefix_entry.get().strip(),
+            "default_download_dir": self.set_dir_var.get().strip() or DEFAULT_DOWNLOAD_DIR,
+            "default_auto_subfolder": self.set_subfolder_var.get(),
+            "default_embed_thumbnail": self.set_thumb_var.get(),
+            "default_download_subtitles": self.set_sub_var.get(),
+            "default_subtitle_lang": self.set_sub_lang_entry.get().strip() or "en",
+            "default_speed_limit": self.set_speed_entry.get().strip(),
+        }
+
+        save_app_settings(new_settings)
+        self.app_settings = new_settings
+
+        # Synchronize live Downloads Studio controls
+        self.quality_var.set(new_settings["default_quality"])
+        self.format_var.set(new_settings["default_format"])
+        self.naming_var.set(new_settings["default_naming_scheme"])
+        self.prefix_entry.delete(0, "end")
+        self.prefix_entry.insert(0, new_settings["default_custom_prefix"])
+        self.dir_var.set(new_settings["default_download_dir"])
+        self.subfolder_var.set(new_settings["default_auto_subfolder"])
+        self.thumbnail_var.set(new_settings["default_embed_thumbnail"])
+        self.subtitle_var.set(new_settings["default_download_subtitles"])
+        self.subtitle_lang_entry.delete(0, "end")
+        self.subtitle_lang_entry.insert(0, new_settings["default_subtitle_lang"])
+        self.speed_entry.delete(0, "end")
+        self.speed_entry.insert(0, new_settings["default_speed_limit"])
+
+        messagebox.showinfo("Settings Saved", "✅ Default settings saved successfully!\nDownloads Studio has been updated with your new defaults.")
+        self._update_status("⚙️ Global default settings saved.")
+
+    def _reset_default_settings(self):
+        """Reset default settings to factory defaults."""
+        if messagebox.askyesno("Reset Defaults", "Reset all default settings to original factory values?"):
+            save_app_settings(dict(DEFAULT_APP_SETTINGS))
+            self.app_settings = dict(DEFAULT_APP_SETTINGS)
+            self._refresh_settings_view()
+            messagebox.showinfo("Reset Complete", "Default settings restored to factory defaults.")
+
+    def _refresh_settings_view(self):
+        """Populate settings widgets with latest app_settings."""
+        if hasattr(self, "set_quality_var"):
+            self.set_quality_var.set(self.app_settings.get("default_quality", "Best Quality"))
+            self.set_format_var.set(self.app_settings.get("default_format", "mp4"))
+            self.set_naming_var.set(self.app_settings.get("default_naming_scheme", "Numbered + Rewrite Title (01 - Cleaned)"))
+            self.set_prefix_entry.delete(0, "end")
+            self.set_prefix_entry.insert(0, self.app_settings.get("default_custom_prefix", ""))
+            self.set_dir_var.set(self.app_settings.get("default_download_dir", DEFAULT_DOWNLOAD_DIR))
+            self.set_subfolder_var.set(self.app_settings.get("default_auto_subfolder", True))
+            self.set_thumb_var.set(self.app_settings.get("default_embed_thumbnail", False))
+            self.set_sub_var.set(self.app_settings.get("default_download_subtitles", False))
+            self.set_sub_lang_entry.delete(0, "end")
+            self.set_sub_lang_entry.insert(0, self.app_settings.get("default_subtitle_lang", "en"))
+            self.set_speed_entry.delete(0, "end")
+            self.set_speed_entry.insert(0, self.app_settings.get("default_speed_limit", ""))
+            if hasattr(self, "set_cookie_status_label"):
+                self.set_cookie_status_label.configure(
+                    text=self._get_cookie_status_text(),
+                    text_color="#2ECC71" if self._has_cookies() else "#F39C12"
+                )
+
     def _start_scheduler_ticker(self):
-        """Update live countdown across Scheduler Studio dynamically every 1 second."""
+        """Update live countdown across Scheduler Studio and Batches Studio dynamically every 1 second."""
         try:
             jobs = self.scheduler.get_all()
             pending = [j for j in jobs if j.get("status") == "Pending"]
@@ -1283,12 +1718,21 @@ class App(ctk.CTk):
                 if hasattr(self, "scheduler_ticker_label"):
                     self.scheduler_ticker_label.configure(text="⏳ No upcoming scheduled downloads.")
 
-            # Live update per-card countdowns if in Scheduler Studio
+            # Live update per-card countdowns in Scheduler Studio
             if self.current_nav_view == "scheduler" and hasattr(self, "_schedule_countdown_labels"):
                 for jid, (lbl, r_at) in list(self._schedule_countdown_labels.items()):
                     try:
                         c_text = self.scheduler.get_countdown(r_at)
                         lbl.configure(text=f"⏳ Countdown: {c_text}")
+                    except Exception:
+                        pass
+
+            # Live update per-card countdowns in Batches Studio
+            if self.current_nav_view == "batches" and hasattr(self, "_batch_countdown_labels"):
+                for bid, (b_lbl, r_at) in list(self._batch_countdown_labels.items()):
+                    try:
+                        b_cd = self.scheduler.get_countdown(r_at)
+                        b_lbl.configure(text=f"⏳ Starts In: {b_cd}")
                     except Exception:
                         pass
         except Exception:
@@ -1720,12 +2164,15 @@ class App(ctk.CTk):
         def worker():
             from downloader import get_js_runtime_config
             js_cfg = get_js_runtime_config()
-            if js_cfg:
-                rt_name = list(js_cfg.keys())[0]
-                rt_label = 'Deno' if rt_name == 'deno' else 'Node.js'
-                self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt_label} active (YouTube challenge solver enabled)"))
-            else:
-                self.after(0, lambda: self._log("⚠️ JS Engine missing! YouTube challenge solver may be restricted."))
+            try:
+                if js_cfg:
+                    rt_name = list(js_cfg.keys())[0]
+                    rt_label = 'Deno' if rt_name == 'deno' else 'Node.js'
+                    self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt_label} active (YouTube challenge solver enabled)"))
+                else:
+                    self.after(0, lambda: self._log("⚠️ JS Engine missing! YouTube challenge solver may be restricted."))
+            except Exception:
+                pass
 
             if sys.platform.startswith('linux'):
                 missing = []
