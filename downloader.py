@@ -192,6 +192,7 @@ class DownloadManager:
             'extract_flat': 'in_playlist' if flat else False,
             'ignoreerrors': True,
             'lazy_playlist': False,
+            'remote_components': ['ejs:github'],
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android'],
@@ -367,6 +368,9 @@ class DownloadManager:
             'continuedl': True,
             'overwrites': False,
             'windowsfilenames': True,
+            'remote_components': ['ejs:github'],
+            'format_sort': ['hasvid'],
+            'format_sort_force': True,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android'],
@@ -500,6 +504,20 @@ class DownloadManager:
 
             files_after = self._get_files_in_dir(base_dir)
             new_files = files_after - files_before
+
+            last_err = logger.get_last_error() or f"Code {result}"
+            if result != 0 and any(token in last_err.lower() for token in ['403', 'requested format', 'unavailable', 'forbidden']):
+                if status_callback:
+                    status_callback("🔄 Retrying with dynamic quality fallback...")
+                fallback_opts = dict(opts)
+                fallback_opts['format'] = 'bestvideo+bestaudio/best'
+                try:
+                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                        result = ydl.download([url])
+                    files_after = self._get_files_in_dir(base_dir)
+                    new_files = files_after - files_before
+                except Exception:
+                    pass
 
             if result == 0:
                 self.completed_videos = 1
@@ -659,6 +677,20 @@ class DownloadManager:
 
                     files_after = self._get_files_in_dir(base_dir)
                     new_files = files_after - files_before
+
+                    last_err = logger.get_last_error() or f"Code {result}"
+                    if result != 0 and any(token in last_err.lower() for token in ['403', 'requested format', 'unavailable', 'forbidden']):
+                        if status_callback:
+                            status_callback(f"[{idx}/{self.total_videos}] 🔄 Retrying with dynamic quality fallback...")
+                        fallback_opts = dict(opts)
+                        fallback_opts['format'] = 'bestvideo+bestaudio/best'
+                        try:
+                            with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                                result = ydl.download([video_url])
+                            files_after = self._get_files_in_dir(base_dir)
+                            new_files = files_after - files_before
+                        except Exception:
+                            pass
 
                     if result == 0:
                         self.completed_videos += 1
