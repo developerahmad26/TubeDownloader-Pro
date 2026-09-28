@@ -55,30 +55,33 @@ class VideoListWindow(ctk.CTkToplevel):
         self.wait_window()
 
     def _build_ui(self):
+        self.configure(fg_color="#0b0e14")
         # Header
-        header = ctk.CTkFrame(self)
-        header.pack(fill="x", padx=10, pady=(10, 5))
+        header = ctk.CTkFrame(self, fg_color="#141822", corner_radius=8, border_width=1, border_color="#242b3d")
+        header.pack(fill="x", padx=12, pady=(12, 6))
 
         ctk.CTkLabel(
             header, text=f"📋 Total Videos: {len(self.videos)}",
-            font=("Segoe UI", 14, "bold")
-        ).pack(side="left", padx=10)
+            font=("Segoe UI", 14, "bold"), text_color="#FFFFFF"
+        ).pack(side="left", padx=14, pady=10)
 
         btn_frame = ctk.CTkFrame(header, fg_color="transparent")
-        btn_frame.pack(side="right", padx=10)
+        btn_frame.pack(side="right", padx=12, pady=10)
 
         ctk.CTkButton(
-            btn_frame, text="✅ Select All", width=110,
+            btn_frame, text="✅ Select All", width=110, height=30,
+            fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=self._select_all
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
         ctk.CTkButton(
-            btn_frame, text="❎ Deselect All", width=110,
+            btn_frame, text="❎ Deselect All", width=110, height=30,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=self._deselect_all
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         # Scrollable video list
-        self.scroll_frame = ctk.CTkScrollableFrame(self)
-        self.scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        self.scroll_frame = ctk.CTkScrollableFrame(self, fg_color="#0f131d", corner_radius=8, border_width=1, border_color="#1e2433")
+        self.scroll_frame.pack(fill="both", expand=True, padx=12, pady=6)
 
         self.checkboxes = []
         self.check_vars = []
@@ -101,32 +104,33 @@ class VideoListWindow(ctk.CTkToplevel):
                 text=f"{idx}. {vtitle}{dur_str}",
                 variable=var,
                 font=("Segoe UI", 12),
+                text_color="#e2e8f0"
             )
-            cb.pack(anchor="w", padx=10, pady=2)
+            cb.pack(anchor="w", padx=12, pady=3)
             self.checkboxes.append(cb)
 
         # Bottom buttons
-        bottom = ctk.CTkFrame(self)
-        bottom.pack(fill="x", padx=10, pady=10)
+        bottom = ctk.CTkFrame(self, fg_color="#141822", corner_radius=8, border_width=1, border_color="#242b3d")
+        bottom.pack(fill="x", padx=12, pady=(6, 12))
 
         ctk.CTkButton(
-            bottom, text="⬇️ Download Selected", width=200,
-            fg_color="#28a745", hover_color="#218838",
+            bottom, text="⬇️ Download Selected", width=200, height=34,
+            fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 12, "bold"), corner_radius=6,
             command=self._confirm
-        ).pack(side="left", padx=10)
+        ).pack(side="left", padx=12, pady=8)
 
         ctk.CTkButton(
-            bottom, text="Cancel", width=100,
-            fg_color="#dc3545", hover_color="#c82333",
+            bottom, text="Cancel", width=100, height=34,
+            fg_color="#450a0a", hover_color="#7f1d1d", text_color="#fca5a5", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=self._cancel
-        ).pack(side="right", padx=10)
+        ).pack(side="right", padx=12, pady=8)
 
         count = sum(v.get() for v in self.check_vars)
         self.selected_label = ctk.CTkLabel(
             bottom, text=f"Selected: {count}",
-            font=("Segoe UI", 12, "bold")
+            font=("Segoe UI", 12, "bold"), text_color="#38bdf8"
         )
-        self.selected_label.pack(side="left", padx=20)
+        self.selected_label.pack(side="left", padx=12, pady=8)
 
         # Bind checkbox changes
         for var in self.check_vars:
@@ -320,9 +324,9 @@ class App(ctk.CTk):
 
         configs = {
             "downloads": {"btn": self.nav_btn_downloads, "active": "#0284c7", "hover": "#0369a1"},
-            "batches": {"btn": self.nav_btn_batches, "active": "#0284c7", "hover": "#0369a1"},
+            "batches": {"btn": self.nav_btn_batches, "active": "#059669", "hover": "#047857"},
             "scheduler": {"btn": self.nav_btn_scheduler, "active": "#7c3aed", "hover": "#6d28d9"},
-            "settings": {"btn": self.nav_btn_settings, "active": "#475569", "hover": "#334155"},
+            "settings": {"btn": self.nav_btn_settings, "active": "#d97706", "hover": "#b45309"},
         }
 
         for k, v in configs.items():
@@ -341,6 +345,7 @@ class App(ctk.CTk):
         # Display exclusively the selected view
         if view_name == "downloads":
             self.downloads_view.pack(fill="both", expand=True, padx=15, pady=8)
+            self._refresh_downloads_kpis()
         elif view_name == "batches":
             self.batches_view.pack(fill="both", expand=True, padx=15, pady=8)
             self._render_batches_list()
@@ -351,8 +356,93 @@ class App(ctk.CTk):
             self.settings_view.pack(fill="both", expand=True, padx=15, pady=8)
             self._refresh_settings_view()
 
+    def _refresh_downloads_kpis(self):
+        """Refresh dynamic counters on Downloads Studio KPI cards."""
+        try:
+            if hasattr(self, "dl_stat_target"):
+                tab_name = "Single Video"
+                if hasattr(self, "tabview"):
+                    try:
+                        tab_name = self.tabview.get().replace("📹 ", "").replace("📋 ", "").replace("📺 ", "")
+                    except Exception:
+                        pass
+                self.dl_stat_target.configure(text=tab_name.upper())
+            if hasattr(self, "dl_stat_batches") and hasattr(self, "batch_manager"):
+                self.dl_stat_batches.configure(text=str(len(self.batch_manager.get_all())))
+            if hasattr(self, "dl_stat_schedules") and hasattr(self, "scheduler"):
+                active_scheds = sum(1 for j in self.scheduler.get_all() if j.get("status") == "Pending")
+                self.dl_stat_schedules.configure(text=str(active_scheds))
+            if hasattr(self, "dl_stat_rules"):
+                try:
+                    from title_rewriter import load_rules
+                    r_data = load_rules()
+                    r_mode = r_data.get("rewrite_mode", "smart_rephrase")
+                    self.dl_stat_rules.configure(text=r_mode.replace("_", " ").title()[:12].upper())
+                except Exception:
+                    self.dl_stat_rules.configure(text="ACTIVE")
+        except Exception:
+            pass
+
     def _build_downloads_view(self):
         """Build the dedicated Downloads Studio view with a clear, compact, professional card-based structure."""
+        # 1. Top Live Hero Card
+        hero_frame = ctk.CTkFrame(self.downloads_view, fg_color="#0c1829", corner_radius=10, border_width=1, border_color="#1d4ed8")
+        hero_frame.pack(fill="x", pady=(0, 8))
+
+        hero_inner = ctk.CTkFrame(hero_frame, fg_color="transparent")
+        hero_inner.pack(fill="x", padx=16, pady=12)
+
+        hero_left = ctk.CTkFrame(hero_inner, fg_color="transparent")
+        hero_left.pack(side="left", fill="both", expand=True)
+
+        ctk.CTkLabel(
+            hero_left, text="📹 Downloads Studio",
+            font=("Segoe UI", 20, "bold"), text_color="#FFFFFF"
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            hero_left, text="High-speed multi-threaded engine with automated title rewriting & 8K stream extraction",
+            font=("Segoe UI", 11), text_color="#94a3b8"
+        ).pack(anchor="w", pady=(2, 0))
+
+        # Hero Right: Illuminated Engine Status Card
+        hero_right = ctk.CTkFrame(hero_inner, fg_color="#06111f", corner_radius=8, border_width=1, border_color="#0284c7")
+        hero_right.pack(side="right", padx=(10, 0))
+
+        hr_inner = ctk.CTkFrame(hero_right, fg_color="transparent")
+        hr_inner.pack(padx=14, pady=8)
+
+        ctk.CTkLabel(
+            hr_inner, text="⚡ ACTIVE ENGINE STATUS",
+            font=("Segoe UI", 9, "bold"), text_color="#38bdf8"
+        ).pack(anchor="w")
+
+        self.engine_ticker_label = ctk.CTkLabel(
+            hr_inner, text="🟢 IDLE & READY",
+            font=("Segoe UI", 12, "bold"), text_color="#00f0ff"
+        )
+        self.engine_ticker_label.pack(anchor="w", pady=(2, 0))
+
+        # 2. Modern 4-KPI Metric Cards Row
+        kpi_row = ctk.CTkFrame(self.downloads_view, fg_color="transparent")
+        kpi_row.pack(fill="x", pady=(0, 8))
+
+        def _make_dl_kpi(parent, title, val_color, bg_color, border_color):
+            card = ctk.CTkFrame(parent, fg_color=bg_color, corner_radius=8, border_width=1, border_color=border_color, height=52)
+            card.pack(side="left", fill="x", expand=True, padx=3)
+            card.pack_propagate(False)
+            inner = ctk.CTkFrame(card, fg_color="transparent")
+            inner.pack(fill="both", expand=True, padx=10, pady=4)
+            val_lbl = ctk.CTkLabel(inner, text="0", font=("Segoe UI", 15, "bold"), text_color=val_color)
+            val_lbl.pack(anchor="w")
+            ctk.CTkLabel(inner, text=title, font=("Segoe UI", 9, "bold"), text_color="#94a3b8").pack(anchor="w")
+            return val_lbl
+
+        self.dl_stat_target = _make_dl_kpi(kpi_row, "ACTIVE TARGET MODE", "#38BDF8", "#0c1d2e", "#1b3c5a")
+        self.dl_stat_batches = _make_dl_kpi(kpi_row, "SAVED BATCHES", "#34D399", "#092418", "#124a30")
+        self.dl_stat_schedules = _make_dl_kpi(kpi_row, "SCHEDULED TASKS", "#C084FC", "#1e1133", "#45226e")
+        self.dl_stat_rules = _make_dl_kpi(kpi_row, "ACTIVE REWRITE RULES", "#FBBF24", "#2a1b08", "#633c0c")
+        self._refresh_downloads_kpis()
+
         # ================= Card 1: Media Source & Input =================
         source_card = ctk.CTkFrame(self.downloads_view, corner_radius=10, fg_color="#141822", border_width=1, border_color="#242b3d")
         source_card.pack(fill="x", pady=(0, 8))
@@ -809,42 +899,42 @@ class App(ctk.CTk):
 
     def _build_batches_view(self):
         """Build the ultra-premium full-screen Batches Studio view."""
-        # 1. Top Header Bar
-        header = ctk.CTkFrame(self.batches_view, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 8))
+        # 1. Top Live Hero Card
+        hero_frame = ctk.CTkFrame(self.batches_view, fg_color="#092019", corner_radius=10, border_width=1, border_color="#059669")
+        hero_frame.pack(fill="x", pady=(0, 8))
 
-        h_left = ctk.CTkFrame(header, fg_color="transparent")
-        h_left.pack(side="left")
+        hero_inner = ctk.CTkFrame(hero_frame, fg_color="transparent")
+        hero_inner.pack(fill="x", padx=16, pady=12)
+
+        hero_left = ctk.CTkFrame(hero_inner, fg_color="transparent")
+        hero_left.pack(side="left", fill="both", expand=True)
 
         ctk.CTkLabel(
-            h_left, text="📁 Batches Studio",
+            hero_left, text="📁 Batches Studio",
             font=("Segoe UI", 20, "bold"), text_color="#FFFFFF"
         ).pack(anchor="w")
         ctk.CTkLabel(
-            h_left, text="Organize, automate, and trigger reusable multi-video download workflows with 1-click",
+            hero_left, text="Organize, automate, and trigger reusable multi-video download workflows with 1-click",
             font=("Segoe UI", 11), text_color="#94a3b8"
-        ).pack(anchor="w", pady=(1, 0))
+        ).pack(anchor="w", pady=(2, 0))
 
-        h_right = ctk.CTkFrame(header, fg_color="transparent")
-        h_right.pack(side="right")
+        # Hero Right: Illuminated Live Batch Engine Display Card
+        hero_right = ctk.CTkFrame(hero_inner, fg_color="#04140e", corner_radius=8, border_width=1, border_color="#10b981")
+        hero_right.pack(side="right", padx=(10, 0))
 
-        ctk.CTkButton(
-            h_right, text="➕ Save Current Setup", width=165, height=34,
-            fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 12, "bold"),
-            corner_radius=6, command=self._save_current_as_batch
-        ).pack(side="left", padx=4)
+        hr_inner = ctk.CTkFrame(hero_right, fg_color="transparent")
+        hr_inner.pack(padx=14, pady=8)
 
-        ctk.CTkButton(
-            h_right, text="🔄 Refresh", width=85, height=34,
-            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"),
-            corner_radius=6, command=self._render_batches_list
-        ).pack(side="left", padx=4)
+        ctk.CTkLabel(
+            hr_inner, text="⚡ ACTIVE BATCH ENGINE",
+            font=("Segoe UI", 9, "bold"), text_color="#34d399"
+        ).pack(anchor="w")
 
-        ctk.CTkButton(
-            h_right, text="🧹 Clear Completed", width=125, height=34,
-            fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 11),
-            corner_radius=6, command=self._clear_completed_batches
-        ).pack(side="left", padx=4)
+        self.batches_ticker_label = ctk.CTkLabel(
+            hr_inner, text="🟢 QUEUE IDLE & READY",
+            font=("Segoe UI", 12, "bold"), text_color="#6ee7b7"
+        )
+        self.batches_ticker_label.pack(anchor="w", pady=(2, 0))
 
         # 2. Modern 5-KPI Stat Dashboard Cards Row
         kpi_row = ctk.CTkFrame(self.batches_view, fg_color="transparent")
@@ -867,7 +957,7 @@ class App(ctk.CTk):
         self.batch_stat_running = _make_kpi_card(kpi_row, "RUNNING NOW", "#FBBF24", "#2a1b08", "#633c0c")
         self.batch_stat_completed = _make_kpi_card(kpi_row, "COMPLETED", "#34D399", "#092418", "#124a30")
 
-        # 3. Search Bar & Filter Control Bar
+        # 3. Search Bar, Filters & Action Buttons Toolbar
         control_bar = ctk.CTkFrame(self.batches_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
         control_bar.pack(fill="x", pady=(0, 8))
 
@@ -877,23 +967,40 @@ class App(ctk.CTk):
         # Real-time search entry
         self.batch_search_entry = ctk.CTkEntry(
             ctrl_inner, textvariable=self.batch_search_var,
-            placeholder_text="🔍 Search batch by name, link, format, #01...", width=360, height=32,
+            placeholder_text="🔍 Search batch by name, link, format, #01...", width=320, height=32,
             fg_color="#0b0e14", border_color="#2d3748", corner_radius=6
         )
-        self.batch_search_entry.pack(side="left", padx=(0, 10))
+        self.batch_search_entry.pack(side="left", padx=(0, 8))
         self._attach_entry_context_menu(self.batch_search_entry)
         self.batch_search_var.trace_add("write", lambda *_: self._render_batches_list())
 
         # Filter dropdown
-        filter_box = ctk.CTkFrame(ctrl_inner, fg_color="transparent")
-        filter_box.pack(side="right")
-        ctk.CTkLabel(filter_box, text="Filter:", font=("Segoe UI", 11, "bold"), text_color="#94a3b8").pack(side="left", padx=4)
+        ctk.CTkLabel(ctrl_inner, text="Filter:", font=("Segoe UI", 11, "bold"), text_color="#94a3b8").pack(side="left", padx=4)
         ctk.CTkOptionMenu(
-            filter_box, variable=self.batch_filter_var,
+            ctrl_inner, variable=self.batch_filter_var,
             values=["All Batches", "Ready", "Scheduled", "Running", "Completed", "Failed"],
-            width=140, height=30, corner_radius=6,
+            width=135, height=30, corner_radius=6,
             command=lambda _: self._render_batches_list()
-        ).pack(side="left")
+        ).pack(side="left", padx=(0, 8))
+
+        # Action Buttons in toolbar
+        ctk.CTkButton(
+            ctrl_inner, text="➕ Save Current Setup", width=165, height=32,
+            fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 11, "bold"),
+            corner_radius=6, command=self._save_current_as_batch
+        ).pack(side="right", padx=4)
+
+        ctk.CTkButton(
+            ctrl_inner, text="🔄 Refresh", width=80, height=32,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"),
+            corner_radius=6, command=self._render_batches_list
+        ).pack(side="right", padx=4)
+
+        ctk.CTkButton(
+            ctrl_inner, text="🧹 Clear Completed", width=125, height=32,
+            fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 11),
+            corner_radius=6, command=self._clear_completed_batches
+        ).pack(side="right", padx=4)
 
         # 4. Scrollable Batch Cards Area
         self.batches_scroll = ctk.CTkScrollableFrame(self.batches_view, fg_color="transparent")
@@ -1017,17 +1124,17 @@ class App(ctk.CTk):
                 st_color = "#d8b4fe"
                 st_bg = "#3b1d5c"
             elif is_comp:
-                card_bg = "#0f1916"
+                card_bg = "#0c1d18"
                 card_border = "#059669"
-                border_w = 1
+                border_w = 1.5
                 status_text = "✅ COMPLETED"
                 st_color = "#6ee7b7"
                 st_bg = "#064e3b"
             else:
-                card_bg = "#141822"
-                card_border = "#262d3d"
-                border_w = 1
-                status_text = "● READY"
+                card_bg = "#0f1626"
+                card_border = "#1d4ed8"
+                border_w = 1.5
+                status_text = "● READY TO RUN"
                 st_color = "#38bdf8"
                 st_bg = "#0c2738"
 
@@ -1695,15 +1802,15 @@ class App(ctk.CTk):
 
     def _build_settings_view(self):
         """Build the dedicated Global Application Settings Studio."""
-        # Top Header Card
-        header_card = ctk.CTkFrame(self.settings_view, corner_radius=10, fg_color="#181329", border_width=1, border_color="#3d2d5e")
+        # 1. Top Live Hero Card
+        header_card = ctk.CTkFrame(self.settings_view, corner_radius=10, fg_color="#1c160a", border_width=1, border_color="#d97706")
         header_card.pack(fill="x", pady=(0, 8))
 
         h_inner = ctk.CTkFrame(header_card, fg_color="transparent")
         h_inner.pack(fill="x", padx=16, pady=12)
 
         h_left = ctk.CTkFrame(h_inner, fg_color="transparent")
-        h_left.pack(side="left")
+        h_left.pack(side="left", fill="both", expand=True)
 
         ctk.CTkLabel(
             h_left, text="⚙️ Settings Studio",
@@ -1712,22 +1819,49 @@ class App(ctk.CTk):
         ctk.CTkLabel(
             h_left, text="Configure global defaults for downloads, directory automation, and anti-bot security",
             font=("Segoe UI", 11), text_color="#94a3b8"
-        ).pack(anchor="w", pady=(1, 0))
+        ).pack(anchor="w", pady=(2, 0))
 
-        h_right = ctk.CTkFrame(h_inner, fg_color="transparent")
-        h_right.pack(side="right")
+        # Hero Right: Illuminated Live Display Card
+        hero_right = ctk.CTkFrame(h_inner, fg_color="#0e0b05", corner_radius=8, border_width=1, border_color="#f59e0b")
+        hero_right.pack(side="right", padx=(10, 0))
+
+        hr_inner = ctk.CTkFrame(hero_right, fg_color="transparent")
+        hr_inner.pack(padx=14, pady=8)
+
+        ctk.CTkLabel(
+            hr_inner, text="⚡ SYSTEM INTEGRITY",
+            font=("Segoe UI", 9, "bold"), text_color="#fbbf24"
+        ).pack(anchor="w")
+
+        self.settings_ticker_label = ctk.CTkLabel(
+            hr_inner, text="🛡️ Anti-Bot Protection Active",
+            font=("Segoe UI", 12, "bold"), text_color="#fde68a"
+        )
+        self.settings_ticker_label.pack(anchor="w", pady=(2, 0))
+
+        # 2. Settings Action Toolbar
+        set_toolbar = ctk.CTkFrame(self.settings_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
+        set_toolbar.pack(fill="x", pady=(0, 8))
+
+        tb_inner = ctk.CTkFrame(set_toolbar, fg_color="transparent")
+        tb_inner.pack(fill="x", padx=12, pady=6)
+
+        ctk.CTkLabel(
+            tb_inner, text="💡 All configurations saved here auto-apply as live defaults across all download tasks.",
+            font=("Segoe UI", 11), text_color="#94a3b8"
+        ).pack(side="left")
 
         ctk.CTkButton(
-            h_right, text="💾 Save Default Settings", width=190, height=34,
-            fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 12, "bold"),
+            tb_inner, text="💾 Save Default Settings", width=190, height=32,
+            fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 11, "bold"),
             corner_radius=6, command=self._save_default_settings
-        ).pack(side="left", padx=4)
+        ).pack(side="right", padx=4)
 
         ctk.CTkButton(
-            h_right, text="🔄 Reset Defaults", width=130, height=34,
+            tb_inner, text="🔄 Reset Defaults", width=130, height=32,
             fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"),
             corner_radius=6, command=self._reset_default_settings
-        ).pack(side="left", padx=4)
+        ).pack(side="right", padx=4)
 
         # Card 1: Download & Storage Defaults
         card_dir = ctk.CTkFrame(self.settings_view, corner_radius=10, fg_color="#141822", border_width=1, border_color="#242b3d")
@@ -1978,6 +2112,47 @@ class App(ctk.CTk):
                         b_lbl.configure(text=f"⏳ Starts In: {b_cd}")
                     except Exception:
                         pass
+
+            # Live update Batches Studio Hero Queue Status
+            if hasattr(self, "batches_ticker_label") and hasattr(self, "batch_manager"):
+                all_b = self.batch_manager.get_all()
+                running_b = [b for b in all_b if self.current_running_batch_id == b.get("id") or b.get("status") == "Running"]
+                if running_b:
+                    bname = running_b[0].get("name", "Batch")
+                    self.batches_ticker_label.configure(
+                        text=f"🚀 RUNNING: '{bname}'", text_color="#fcd34d"
+                    )
+                else:
+                    sched_b = sum(1 for b in all_b if self._get_active_schedule_for_batch(b.get("id")) is not None)
+                    self.batches_ticker_label.configure(
+                        text=f"📦 {len(all_b)} Saved  •  {sched_b} Scheduled", text_color="#6ee7b7"
+                    )
+
+            # Live update Settings Studio Hero Integrity Status
+            if hasattr(self, "settings_ticker_label"):
+                if self._has_cookies():
+                    self.settings_ticker_label.configure(
+                        text="🛡️ Anti-Bot Protection Active", text_color="#fde68a"
+                    )
+                else:
+                    self.settings_ticker_label.configure(
+                        text="⚠️ Standard Mode (No Cookies)", text_color="#94a3b8"
+                    )
+
+            # Live update Downloads Studio Hero Engine Status
+            if hasattr(self, "engine_ticker_label"):
+                if self.dm.is_downloading:
+                    pct = self.progress_percent.cget("text") if hasattr(self, "progress_percent") else ""
+                    self.engine_ticker_label.configure(
+                        text=f"🚀 DOWNLOADING ({pct})", text_color="#38bdf8"
+                    )
+                else:
+                    self.engine_ticker_label.configure(
+                        text="🟢 IDLE & READY", text_color="#00f0ff"
+                    )
+
+            if self.current_nav_view == "downloads":
+                self._refresh_downloads_kpis()
         except Exception:
             pass
         self.after(1000, self._start_scheduler_ticker)

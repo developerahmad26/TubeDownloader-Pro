@@ -43,28 +43,35 @@ class TitleRulesDialog(ctk.CTkToplevel):
         self._build_ui()
 
     def _build_ui(self):
+        self.configure(fg_color="#0b0e14")
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=20, pady=15)
 
-        # Header
-        ctk.CTkLabel(
-            container,
-            text="⚙️ Title Rewriting Engine",
-            font=("Segoe UI", 18, "bold"),
-        ).pack(anchor="w", pady=(0, 2))
+        # Header Hero Card
+        header_card = ctk.CTkFrame(container, fg_color="#181329", corner_radius=10, border_width=1, border_color="#3d2d5e")
+        header_card.pack(fill="x", pady=(0, 10))
+
+        h_inner = ctk.CTkFrame(header_card, fg_color="transparent")
+        h_inner.pack(fill="x", padx=16, pady=12)
 
         ctk.CTkLabel(
-            container,
-            text="Choose how video titles are rephrased, transformed, and organized.",
-            font=("Segoe UI", 12),
-            text_color="gray",
-        ).pack(anchor="w", pady=(0, 12))
+            h_inner,
+            text="⚙️ Title Rewriting Engine",
+            font=("Segoe UI", 18, "bold"), text_color="#FFFFFF"
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            h_inner,
+            text="Choose how video titles are rephrased, transformed, and organized automatically.",
+            font=("Segoe UI", 11),
+            text_color="#94a3b8",
+        ).pack(anchor="w", pady=(2, 0))
 
         # 1. Rewrite Mode Selection Box
-        mode_box = ctk.CTkFrame(container)
-        mode_box.pack(fill="x", pady=(0, 12))
+        mode_box = ctk.CTkFrame(container, fg_color="#121624", corner_radius=8, border_width=1, border_color="#1f293d")
+        mode_box.pack(fill="x", pady=(0, 10))
 
-        ctk.CTkLabel(mode_box, text="Rewrite Style / Engine:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(10, 4))
+        ctk.CTkLabel(mode_box, text="Rewrite Style / Engine:", font=("Segoe UI", 12, "bold"), text_color="#38bdf8").pack(anchor="w", padx=15, pady=(10, 4))
         current_mode_key = self.rules.get("rewrite_mode", "smart_rephrase")
         default_label = self.MODE_KEYS.get(current_mode_key, "✨ Smart Rephrase & Restructure (Real Rewriting)")
 
@@ -73,15 +80,15 @@ class TitleRulesDialog(ctk.CTkToplevel):
             mode_box,
             variable=self.mode_var,
             values=list(self.MODE_LABELS.keys()),
-            width=400,
+            width=450, corner_radius=6,
             command=self._on_mode_change,
         )
         self.mode_menu.pack(anchor="w", padx=15, pady=(0, 10))
 
         # Gemini API Key Entry (Collapsible)
         self.ai_key_frame = ctk.CTkFrame(mode_box, fg_color="transparent")
-        ctk.CTkLabel(self.ai_key_frame, text="Gemini API Key (Free from aistudio.google.com):", font=("Segoe UI", 11), text_color="#17a2b8").pack(anchor="w", padx=15)
-        self.ai_key_entry = ctk.CTkEntry(self.ai_key_frame, width=420, placeholder_text="AIzaSy...", show="*")
+        ctk.CTkLabel(self.ai_key_frame, text="Gemini API Key (Free from aistudio.google.com):", font=("Segoe UI", 11, "bold"), text_color="#c084fc").pack(anchor="w", padx=15)
+        self.ai_key_entry = ctk.CTkEntry(self.ai_key_frame, width=450, placeholder_text="AIzaSy...", show="*", fg_color="#090d16", border_color="#1e2638")
         self.ai_key_entry.insert(0, self.rules.get("gemini_api_key", ""))
         self.ai_key_entry.pack(anchor="w", padx=15, pady=(2, 8))
         self.ai_key_entry.bind("<KeyRelease>", lambda e: self._update_preview())
@@ -90,10 +97,10 @@ class TitleRulesDialog(ctk.CTkToplevel):
             self.ai_key_frame.pack(fill="x")
 
         # 2. Cleaning Flags Frame
-        opts_frame = ctk.CTkFrame(container)
-        opts_frame.pack(fill="x", pady=(0, 12))
+        opts_frame = ctk.CTkFrame(container, fg_color="#121624", corner_radius=8, border_width=1, border_color="#1f293d")
+        opts_frame.pack(fill="x", pady=(0, 10))
 
-        ctk.CTkLabel(opts_frame, text="Pre-Cleaning Options:", font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(8, 2))
+        ctk.CTkLabel(opts_frame, text="Pre-Cleaning Options:", font=("Segoe UI", 12, "bold"), text_color="#34d399").pack(anchor="w", padx=15, pady=(8, 2))
 
         chk_grid = ctk.CTkFrame(opts_frame, fg_color="transparent")
         chk_grid.pack(fill="x", padx=10, pady=(0, 8))
@@ -104,28 +111,28 @@ class TitleRulesDialog(ctk.CTkToplevel):
         self.tags_var = ctk.BooleanVar(value=self.rules.get("remove_resolution_tags", True))
         self.sep_var = ctk.BooleanVar(value=self.rules.get("clean_separators", True))
 
-        ctk.CTkCheckBox(chk_grid, text="Remove Emojis (😱, 🔥, etc.)", variable=self.emoji_var, command=self._update_preview).grid(row=0, column=0, sticky="w", padx=10, pady=4)
-        ctk.CTkCheckBox(chk_grid, text="Remove Hashtags (#shorts, #vlog)", variable=self.hashtag_var, command=self._update_preview).grid(row=0, column=1, sticky="w", padx=10, pady=4)
-        ctk.CTkCheckBox(chk_grid, text="Remove Mentions (@channel)", variable=self.mention_var, command=self._update_preview).grid(row=1, column=0, sticky="w", padx=10, pady=4)
-        ctk.CTkCheckBox(chk_grid, text="Remove Tags ([1080p], Official)", variable=self.tags_var, command=self._update_preview).grid(row=1, column=1, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Emojis (😱, 🔥, etc.)", variable=self.emoji_var, text_color="#cbd5e1", command=self._update_preview).grid(row=0, column=0, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Hashtags (#shorts, #vlog)", variable=self.hashtag_var, text_color="#cbd5e1", command=self._update_preview).grid(row=0, column=1, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Mentions (@channel)", variable=self.mention_var, text_color="#cbd5e1", command=self._update_preview).grid(row=1, column=0, sticky="w", padx=10, pady=4)
+        ctk.CTkCheckBox(chk_grid, text="Remove Tags ([1080p], Official)", variable=self.tags_var, text_color="#cbd5e1", command=self._update_preview).grid(row=1, column=1, sticky="w", padx=10, pady=4)
 
-        # 3. Live Test & Preview Frame
-        prev_frame = ctk.CTkFrame(container)
+        # 3. Live Test & Preview Frame (Illuminated Cyber Dashboard)
+        prev_frame = ctk.CTkFrame(container, fg_color="#090e18", corner_radius=8, border_width=1, border_color="#0284c7")
         prev_frame.pack(fill="x", pady=(0, 12))
 
-        ctk.CTkLabel(prev_frame, text="🧪 Live Title Rewriting Preview:", font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=15, pady=(10, 4))
-        ctk.CTkLabel(prev_frame, text="Test Title:", font=("Segoe UI", 11), text_color="gray").pack(anchor="w", padx=15)
-        self.test_entry = ctk.CTkEntry(prev_frame, height=32, font=("Segoe UI", 12))
+        ctk.CTkLabel(prev_frame, text="🧪 Live Title Rewriting Preview:", font=("Segoe UI", 12, "bold"), text_color="#38bdf8").pack(anchor="w", padx=15, pady=(10, 4))
+        ctk.CTkLabel(prev_frame, text="Test Title:", font=("Segoe UI", 11), text_color="#94a3b8").pack(anchor="w", padx=15)
+        self.test_entry = ctk.CTkEntry(prev_frame, height=32, font=("Segoe UI", 12), fg_color="#06090e", border_color="#1e2638")
         self.test_entry.insert(0, "Aaj सुबह सुबह Ye Kya Ho Gaya | Vlog #12 #shorts @shiv [1080p] 😱")
         self.test_entry.pack(fill="x", padx=15, pady=(2, 6))
         self.test_entry.bind("<KeyRelease>", lambda e: self._update_preview())
 
-        ctk.CTkLabel(prev_frame, text="Rewritten Output:", font=("Segoe UI", 11), text_color="#2ECC71").pack(anchor="w", padx=15)
+        ctk.CTkLabel(prev_frame, text="Rewritten Output:", font=("Segoe UI", 11, "bold"), text_color="#34d399").pack(anchor="w", padx=15)
         self.result_label = ctk.CTkLabel(
             prev_frame,
             text="",
             font=("Segoe UI", 13, "bold"),
-            text_color="#3498DB",
+            text_color="#00f0ff",
             anchor="w",
             wraplength=620,
             justify="left",
@@ -139,33 +146,36 @@ class TitleRulesDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             btn_frame,
             text="💾 Save & Apply Rules",
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#28a745",
-            hover_color="#218838",
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#059669",
+            hover_color="#10b981",
             width=180,
             height=36,
+            corner_radius=6,
             command=self._save,
         ).pack(side="left")
 
         ctk.CTkButton(
             btn_frame,
-            text="Reset to Defaults",
-            font=("Segoe UI", 12),
-            fg_color="#6c757d",
-            hover_color="#5a6268",
+            text="🔄 Reset Defaults",
+            font=("Segoe UI", 11, "bold"),
+            fg_color="#334155",
+            hover_color="#475569",
             width=140,
             height=36,
+            corner_radius=6,
             command=self._reset_defaults,
         ).pack(side="left", padx=10)
 
         ctk.CTkButton(
             btn_frame,
             text="Close",
-            font=("Segoe UI", 12),
-            fg_color="#343a40",
-            hover_color="#23272b",
-            width=100,
+            font=("Segoe UI", 11),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            width=90,
             height=36,
+            corner_radius=6,
             command=self.destroy,
         ).pack(side="right")
 
@@ -239,55 +249,62 @@ class ScheduleDialog(ctk.CTkToplevel):
         self._build_ui()
 
     def _build_ui(self):
+        self.configure(fg_color="#0b0e14")
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=22, pady=16)
 
-        # Header
-        ctk.CTkLabel(container, text="⏰ Schedule Download", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 2))
-        ctk.CTkLabel(container, text=f"Target: {self.target_name or 'Current Download'}", font=("Segoe UI", 12), text_color="#3498DB").pack(anchor="w", pady=(0, 12))
+        # Header Hero Card
+        header_card = ctk.CTkFrame(container, fg_color="#181329", corner_radius=10, border_width=1, border_color="#3d2d5e")
+        header_card.pack(fill="x", pady=(0, 10))
+
+        h_inner = ctk.CTkFrame(header_card, fg_color="transparent")
+        h_inner.pack(fill="x", padx=16, pady=12)
+
+        ctk.CTkLabel(h_inner, text="⏰ Schedule Download", font=("Segoe UI", 18, "bold"), text_color="#FFFFFF").pack(anchor="w")
+        ctk.CTkLabel(h_inner, text=f"Target: {self.target_name or 'Current Download'}", font=("Segoe UI", 11), text_color="#c084fc").pack(anchor="w", pady=(2, 0))
 
         # Task Name
-        ctk.CTkLabel(container, text="Task Label / Name:", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 2))
-        self.name_entry = ctk.CTkEntry(container, height=32, font=("Segoe UI", 12))
+        ctk.CTkLabel(container, text="Task Label / Name:", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(anchor="w", pady=(0, 2))
+        self.name_entry = ctk.CTkEntry(container, height=32, font=("Segoe UI", 12), fg_color="#090d16", border_color="#1e2638")
         default_label = f"Schedule - {self.target_name}" if self.target_name else "Scheduled Download"
         self.name_entry.insert(0, default_label[:50])
-        self.name_entry.pack(fill="x", pady=(0, 12))
+        self.name_entry.pack(fill="x", pady=(0, 10))
 
         # Quick 1-Click Presets Box
-        presets_frame = ctk.CTkFrame(container)
-        presets_frame.pack(fill="x", pady=(0, 12))
+        presets_frame = ctk.CTkFrame(container, fg_color="#121624", corner_radius=8, border_width=1, border_color="#1f293d")
+        presets_frame.pack(fill="x", pady=(0, 10))
 
-        ctk.CTkLabel(presets_frame, text="⚡ Quick 1-Click Presets:", font=("Segoe UI", 11, "bold"), text_color="#17a2b8").pack(anchor="w", padx=12, pady=(6, 4))
+        ctk.CTkLabel(presets_frame, text="⚡ Quick 1-Click Presets:", font=("Segoe UI", 11, "bold"), text_color="#38bdf8").pack(anchor="w", padx=12, pady=(8, 4))
         p_row1 = ctk.CTkFrame(presets_frame, fg_color="transparent")
         p_row1.pack(fill="x", padx=8, pady=(0, 4))
 
-        ctk.CTkButton(p_row1, text="+15 Mins", width=75, height=26, command=lambda: self._add_offset(minutes=15)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row1, text="+30 Mins", width=75, height=26, command=lambda: self._add_offset(minutes=30)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row1, text="+1 Hour", width=75, height=26, command=lambda: self._add_offset(hours=1)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row1, text="+2 Hours", width=75, height=26, command=lambda: self._add_offset(hours=2)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row1, text="+6 Hours", width=75, height=26, command=lambda: self._add_offset(hours=6)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+15 Mins", width=75, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._add_offset(minutes=15)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+30 Mins", width=75, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._add_offset(minutes=30)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+1 Hour", width=75, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._add_offset(hours=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+2 Hours", width=75, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._add_offset(hours=2)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row1, text="+6 Hours", width=75, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._add_offset(hours=6)).pack(side="left", padx=3)
 
         p_row2 = ctk.CTkFrame(presets_frame, fg_color="transparent")
         p_row2.pack(fill="x", padx=8, pady=(0, 8))
 
-        ctk.CTkButton(p_row2, text="Tonight 23:00 (11 PM)", width=135, height=26, command=lambda: self._set_clock(23, 0, days=0)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row2, text="Midnight 00:00", width=110, height=26, command=lambda: self._set_clock(0, 0, days=1)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row2, text="Tomorrow 02:00 AM", width=135, height=26, command=lambda: self._set_clock(2, 0, days=1)).pack(side="left", padx=3)
-        ctk.CTkButton(p_row2, text="Tomorrow 06:00 AM", width=135, height=26, command=lambda: self._set_clock(6, 0, days=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Tonight 23:00 (11 PM)", width=135, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._set_clock(23, 0, days=0)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Midnight 00:00", width=110, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._set_clock(0, 0, days=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Tomorrow 02:00 AM", width=135, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._set_clock(2, 0, days=1)).pack(side="left", padx=3)
+        ctk.CTkButton(p_row2, text="Tomorrow 06:00 AM", width=135, height=26, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._set_clock(6, 0, days=1)).pack(side="left", padx=3)
 
         # Time & Date Spinner Box
-        picker_box = ctk.CTkFrame(container)
-        picker_box.pack(fill="x", pady=(0, 12))
+        picker_box = ctk.CTkFrame(container, fg_color="#121624", corner_radius=8, border_width=1, border_color="#1f293d")
+        picker_box.pack(fill="x", pady=(0, 10))
 
         # Row: Date buttons & entry
         d_row = ctk.CTkFrame(picker_box, fg_color="transparent")
         d_row.pack(fill="x", padx=12, pady=(10, 6))
 
-        ctk.CTkLabel(d_row, text="Date:", font=("Segoe UI", 12, "bold"), width=50).pack(side="left")
-        ctk.CTkButton(d_row, text="Today", width=65, height=28, command=self._set_today).pack(side="left", padx=3)
-        ctk.CTkButton(d_row, text="Tomorrow", width=75, height=28, command=self._set_tomorrow).pack(side="left", padx=3)
+        ctk.CTkLabel(d_row, text="Date:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1", width=50).pack(side="left")
+        ctk.CTkButton(d_row, text="Today", width=65, height=28, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 11, "bold"), corner_radius=4, command=self._set_today).pack(side="left", padx=3)
+        ctk.CTkButton(d_row, text="Tomorrow", width=75, height=28, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 11, "bold"), corner_radius=4, command=self._set_tomorrow).pack(side="left", padx=3)
 
-        self.date_entry = ctk.CTkEntry(d_row, width=120, height=28)
+        self.date_entry = ctk.CTkEntry(d_row, width=120, height=28, fg_color="#090d16", border_color="#1e2638")
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
         self.date_entry.pack(side="left", padx=(10, 0))
         self.date_entry.bind("<KeyRelease>", lambda e: self._update_summary())
@@ -296,48 +313,48 @@ class ScheduleDialog(ctk.CTkToplevel):
         t_row = ctk.CTkFrame(picker_box, fg_color="transparent")
         t_row.pack(fill="x", padx=12, pady=(4, 10))
 
-        ctk.CTkLabel(t_row, text="Time:", font=("Segoe UI", 12, "bold"), width=50).pack(side="left")
+        ctk.CTkLabel(t_row, text="Time:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1", width=50).pack(side="left")
 
         # Hour Box with +/-
         init_time = datetime.now() + timedelta(minutes=15)
-        self.hour_entry = ctk.CTkEntry(t_row, width=45, height=32, font=("Segoe UI", 14, "bold"), justify="center")
+        self.hour_entry = ctk.CTkEntry(t_row, width=45, height=32, font=("Segoe UI", 14, "bold"), justify="center", fg_color="#090d16", border_color="#1e2638")
         self.hour_entry.insert(0, f"{init_time.hour:02d}")
         self.hour_entry.pack(side="left", padx=(0, 2))
         self.hour_entry.bind("<KeyRelease>", lambda e: self._update_summary())
 
         h_btn_box = ctk.CTkFrame(t_row, fg_color="transparent")
         h_btn_box.pack(side="left", padx=(0, 6))
-        ctk.CTkButton(h_btn_box, text="▲", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_hour(1)).pack()
-        ctk.CTkButton(h_btn_box, text="▼", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_hour(-1)).pack()
+        ctk.CTkButton(h_btn_box, text="▲", width=22, height=15, font=("Segoe UI", 9), fg_color="#334155", hover_color="#475569", command=lambda: self._step_hour(1)).pack()
+        ctk.CTkButton(h_btn_box, text="▼", width=22, height=15, font=("Segoe UI", 9), fg_color="#334155", hover_color="#475569", command=lambda: self._step_hour(-1)).pack()
 
-        ctk.CTkLabel(t_row, text=":", font=("Segoe UI", 18, "bold")).pack(side="left", padx=2)
+        ctk.CTkLabel(t_row, text=":", font=("Segoe UI", 18, "bold"), text_color="#cbd5e1").pack(side="left", padx=2)
 
         # Minute Box with +/-
-        self.min_entry = ctk.CTkEntry(t_row, width=45, height=32, font=("Segoe UI", 14, "bold"), justify="center")
+        self.min_entry = ctk.CTkEntry(t_row, width=45, height=32, font=("Segoe UI", 14, "bold"), justify="center", fg_color="#090d16", border_color="#1e2638")
         self.min_entry.insert(0, f"{init_time.minute:02d}")
         self.min_entry.pack(side="left", padx=(2, 2))
         self.min_entry.bind("<KeyRelease>", lambda e: self._update_summary())
 
         m_btn_box = ctk.CTkFrame(t_row, fg_color="transparent")
         m_btn_box.pack(side="left", padx=(0, 15))
-        ctk.CTkButton(m_btn_box, text="▲", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_min(5)).pack()
-        ctk.CTkButton(m_btn_box, text="▼", width=22, height=15, font=("Segoe UI", 9), command=lambda: self._step_min(-5)).pack()
+        ctk.CTkButton(m_btn_box, text="▲", width=22, height=15, font=("Segoe UI", 9), fg_color="#334155", hover_color="#475569", command=lambda: self._step_min(5)).pack()
+        ctk.CTkButton(m_btn_box, text="▼", width=22, height=15, font=("Segoe UI", 9), fg_color="#334155", hover_color="#475569", command=lambda: self._step_min(-5)).pack()
 
         # Quick min step buttons
-        ctk.CTkButton(t_row, text="+5m", width=42, height=28, command=lambda: self._step_min(5)).pack(side="left", padx=2)
-        ctk.CTkButton(t_row, text="+15m", width=48, height=28, command=lambda: self._step_min(15)).pack(side="left", padx=2)
-        ctk.CTkButton(t_row, text="+1h", width=42, height=28, command=lambda: self._step_hour(1)).pack(side="left", padx=2)
+        ctk.CTkButton(t_row, text="+5m", width=42, height=28, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._step_min(5)).pack(side="left", padx=2)
+        ctk.CTkButton(t_row, text="+15m", width=48, height=28, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._step_min(15)).pack(side="left", padx=2)
+        ctk.CTkButton(t_row, text="+1h", width=42, height=28, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=lambda: self._step_hour(1)).pack(side="left", padx=2)
 
         # Recurring check
         self.repeat_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(picker_box, text="🔁 Repeat Daily at this exact time", variable=self.repeat_var).pack(anchor="w", padx=12, pady=(0, 8))
+        ctk.CTkCheckBox(picker_box, text="🔁 Repeat Daily at this exact time", variable=self.repeat_var, text_color="#cbd5e1").pack(anchor="w", padx=12, pady=(0, 8))
 
         # Live Countdown Confirmation Card
-        self.summary_box = ctk.CTkFrame(container, fg_color="#1a252f")
+        self.summary_box = ctk.CTkFrame(container, fg_color="#090e18", corner_radius=8, border_width=1.5, border_color="#7c3aed")
         self.summary_box.pack(fill="x", pady=(0, 12))
 
         self.summary_label = ctk.CTkLabel(
-            self.summary_box, text="", font=("Segoe UI", 13, "bold"), text_color="#2ECC71", padx=12, pady=8
+            self.summary_box, text="", font=("Segoe UI", 13, "bold"), text_color="#00f0ff", padx=14, pady=8
         )
         self.summary_label.pack(anchor="w")
         self._update_summary()
@@ -349,22 +366,24 @@ class ScheduleDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             btn_box,
             text="⏰ Confirm & Schedule",
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#6f42c1",
-            hover_color="#59359a",
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#7c3aed",
+            hover_color="#6d28d9",
             width=200,
             height=38,
+            corner_radius=6,
             command=self._confirm,
         ).pack(side="left")
 
         ctk.CTkButton(
             btn_box,
             text="Cancel",
-            font=("Segoe UI", 12),
-            fg_color="#343a40",
-            hover_color="#23272b",
-            width=100,
+            font=("Segoe UI", 11),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            width=90,
             height=38,
+            corner_radius=6,
             command=self.destroy,
         ).pack(side="right")
 
@@ -508,54 +527,61 @@ class SaveBatchDialog(ctk.CTkToplevel):
         self._build_ui()
 
     def _build_ui(self):
+        self.configure(fg_color="#0b0e14")
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=20, pady=15)
 
-        # Header
+        # Header Hero Card
+        header_card = ctk.CTkFrame(container, fg_color="#092019", corner_radius=10, border_width=1, border_color="#059669")
+        header_card.pack(fill="x", pady=(0, 10))
+
+        h_inner = ctk.CTkFrame(header_card, fg_color="transparent")
+        h_inner.pack(fill="x", padx=16, pady=12)
+
         ctk.CTkLabel(
-            container,
+            h_inner,
             text="💾 Save Download Batch",
-            font=("Segoe UI", 18, "bold"),
-        ).pack(anchor="w", pady=(0, 2))
+            font=("Segoe UI", 18, "bold"), text_color="#FFFFFF"
+        ).pack(anchor="w")
 
         ctk.CTkLabel(
-            container,
-            text="Save this channel, playlist, or video configuration as a reusable batch.",
-            font=("Segoe UI", 12),
-            text_color="gray",
-        ).pack(anchor="w", pady=(0, 12))
+            h_inner,
+            text="Save this channel, playlist, or video configuration as a reusable automated batch.",
+            font=("Segoe UI", 11),
+            text_color="#94a3b8",
+        ).pack(anchor="w", pady=(2, 0))
 
-        form = ctk.CTkFrame(container)
-        form.pack(fill="both", expand=True, pady=(0, 12), padx=4)
+        form = ctk.CTkFrame(container, fg_color="#121624", corner_radius=8, border_width=1, border_color="#1f293d")
+        form.pack(fill="both", expand=True, pady=(0, 12), padx=2)
 
         # 1. Batch Name
-        ctk.CTkLabel(form, text="Batch Name:", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=6)
-        self.name_entry = ctk.CTkEntry(form, width=390, height=30)
+        ctk.CTkLabel(form, text="Batch Name:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=0, column=0, sticky="w", padx=12, pady=6)
+        self.name_entry = ctk.CTkEntry(form, width=390, height=30, fg_color="#090d16", border_color="#1e2638")
         default_name = self.data.get("name") or self.data.get("subfolder") or "My Download Batch"
         self.name_entry.insert(0, default_name[:60])
         self.name_entry.grid(row=0, column=1, sticky="w", padx=10, pady=6)
 
         # 2. Type
-        ctk.CTkLabel(form, text="Type:", font=("Segoe UI", 12, "bold")).grid(row=1, column=0, sticky="w", padx=12, pady=6)
+        ctk.CTkLabel(form, text="Type:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=1, column=0, sticky="w", padx=12, pady=6)
         self.type_var = ctk.StringVar(value=self.data.get("type", "channel"))
-        ctk.CTkOptionMenu(form, variable=self.type_var, values=["single", "playlist", "channel"], width=180, height=28).grid(row=1, column=1, sticky="w", padx=10, pady=6)
+        ctk.CTkOptionMenu(form, variable=self.type_var, values=["single", "playlist", "channel"], width=180, height=28, corner_radius=6).grid(row=1, column=1, sticky="w", padx=10, pady=6)
 
         # 3. URL
-        ctk.CTkLabel(form, text="YouTube URL:", font=("Segoe UI", 12, "bold")).grid(row=2, column=0, sticky="w", padx=12, pady=6)
-        self.url_entry = ctk.CTkEntry(form, width=390, height=30)
+        ctk.CTkLabel(form, text="YouTube URL:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=2, column=0, sticky="w", padx=12, pady=6)
+        self.url_entry = ctk.CTkEntry(form, width=390, height=30, fg_color="#090d16", border_color="#1e2638")
         self.url_entry.insert(0, self.data.get("url", ""))
         self.url_entry.grid(row=2, column=1, sticky="w", padx=10, pady=6)
 
         # 4. Quality & Format
-        ctk.CTkLabel(form, text="Quality / Format:", font=("Segoe UI", 12, "bold")).grid(row=3, column=0, sticky="w", padx=12, pady=6)
+        ctk.CTkLabel(form, text="Quality / Format:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=3, column=0, sticky="w", padx=12, pady=6)
         qf_row = ctk.CTkFrame(form, fg_color="transparent")
         qf_row.grid(row=3, column=1, sticky="w", padx=10, pady=6)
 
         self.quality_var = ctk.StringVar(value=self.data.get("quality", "Best Quality"))
-        ctk.CTkOptionMenu(qf_row, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=200, height=28).pack(side="left")
+        ctk.CTkOptionMenu(qf_row, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=200, height=28, corner_radius=6).pack(side="left")
 
         self.format_var = ctk.StringVar(value=self.data.get("format", "mp4"))
-        ctk.CTkOptionMenu(qf_row, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90, height=28).pack(side="left", padx=8)
+        ctk.CTkOptionMenu(qf_row, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90, height=28, corner_radius=6).pack(side="left", padx=8)
 
         # 5. Naming Scheme (Reverse mapped to human label)
         raw_naming = self.data.get("naming_scheme", "title")
@@ -565,13 +591,13 @@ class SaveBatchDialog(ctk.CTkToplevel):
                 display_naming = k
                 break
 
-        ctk.CTkLabel(form, text="Naming Scheme:", font=("Segoe UI", 12, "bold")).grid(row=4, column=0, sticky="w", padx=12, pady=6)
+        ctk.CTkLabel(form, text="Naming Scheme:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=4, column=0, sticky="w", padx=12, pady=6)
         self.naming_var = ctk.StringVar(value=display_naming)
-        ctk.CTkOptionMenu(form, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=330, height=28).grid(row=4, column=1, sticky="w", padx=10, pady=6)
+        ctk.CTkOptionMenu(form, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=330, height=28, corner_radius=6).grid(row=4, column=1, sticky="w", padx=10, pady=6)
 
         # 6. Custom Prefix
-        ctk.CTkLabel(form, text="Custom Prefix:", font=("Segoe UI", 12, "bold")).grid(row=5, column=0, sticky="w", padx=12, pady=6)
-        self.prefix_entry = ctk.CTkEntry(form, width=220, height=30)
+        ctk.CTkLabel(form, text="Custom Prefix:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=5, column=0, sticky="w", padx=12, pady=6)
+        self.prefix_entry = ctk.CTkEntry(form, width=220, height=30, fg_color="#090d16", border_color="#1e2638")
         self.prefix_entry.insert(0, self.data.get("custom_prefix", ""))
         self.prefix_entry.grid(row=5, column=1, sticky="w", padx=10, pady=6)
 
@@ -583,23 +609,23 @@ class SaveBatchDialog(ctk.CTkToplevel):
                 display_sel = k
                 break
 
-        ctk.CTkLabel(form, text="Range / Selection:", font=("Segoe UI", 12, "bold")).grid(row=6, column=0, sticky="w", padx=12, pady=6)
+        ctk.CTkLabel(form, text="Range / Selection:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=6, column=0, sticky="w", padx=12, pady=6)
         sel_row = ctk.CTkFrame(form, fg_color="transparent")
         sel_row.grid(row=6, column=1, sticky="w", padx=10, pady=6)
 
         self.sel_var = ctk.StringVar(value=display_sel)
-        ctk.CTkOptionMenu(sel_row, variable=self.sel_var, values=list(SELECTION_MODES.keys()), width=160, height=28).pack(side="left")
+        ctk.CTkOptionMenu(sel_row, variable=self.sel_var, values=list(SELECTION_MODES.keys()), width=160, height=28, corner_radius=6).pack(side="left")
 
-        self.sel_val_entry = ctk.CTkEntry(sel_row, width=120, height=28, placeholder_text="e.g. 1-50")
+        self.sel_val_entry = ctk.CTkEntry(sel_row, width=120, height=28, placeholder_text="e.g. 1-50", fg_color="#090d16", border_color="#1e2638")
         self.sel_val_entry.insert(0, self.data.get("selection_value", ""))
         self.sel_val_entry.pack(side="left", padx=8)
 
         # 8. Download Directory
-        ctk.CTkLabel(form, text="Download Folder:", font=("Segoe UI", 12, "bold")).grid(row=7, column=0, sticky="w", padx=12, pady=6)
+        ctk.CTkLabel(form, text="Download Folder:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1").grid(row=7, column=0, sticky="w", padx=12, pady=6)
         dir_row = ctk.CTkFrame(form, fg_color="transparent")
         dir_row.grid(row=7, column=1, sticky="w", padx=10, pady=6)
 
-        self.dir_entry = ctk.CTkEntry(dir_row, width=285, height=28)
+        self.dir_entry = ctk.CTkEntry(dir_row, width=285, height=28, fg_color="#090d16", border_color="#1e2638")
         self.dir_entry.insert(0, self.data.get("download_dir", DEFAULT_DOWNLOAD_DIR))
         self.dir_entry.pack(side="left")
 
@@ -609,15 +635,15 @@ class SaveBatchDialog(ctk.CTkToplevel):
                 self.dir_entry.delete(0, "end")
                 self.dir_entry.insert(0, chosen)
 
-        ctk.CTkButton(dir_row, text="📁 Browse", width=75, height=28, command=_browse_dir).pack(side="left", padx=6)
+        ctk.CTkButton(dir_row, text="📁 Browse", width=75, height=28, fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"), corner_radius=4, command=_browse_dir).pack(side="left", padx=6)
 
         # 9. Extra checkboxes
         cb_row = ctk.CTkFrame(form, fg_color="transparent")
         cb_row.grid(row=8, column=1, sticky="w", padx=10, pady=6)
         self.thumb_var = ctk.BooleanVar(value=bool(self.data.get("embed_thumbnail", False)))
-        ctk.CTkCheckBox(cb_row, text="Embed Thumbnail", variable=self.thumb_var).pack(side="left", padx=(0, 15))
+        ctk.CTkCheckBox(cb_row, text="Embed Thumbnail", variable=self.thumb_var, text_color="#cbd5e1").pack(side="left", padx=(0, 15))
         self.sub_var = ctk.BooleanVar(value=bool(self.data.get("download_subtitles", False)))
-        ctk.CTkCheckBox(cb_row, text="Download Subtitles", variable=self.sub_var).pack(side="left")
+        ctk.CTkCheckBox(cb_row, text="Download Subtitles", variable=self.sub_var, text_color="#cbd5e1").pack(side="left")
 
         # Buttons
         btn_box = ctk.CTkFrame(container, fg_color="transparent")
@@ -626,7 +652,7 @@ class SaveBatchDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             btn_box,
             text="💾 Save Batch",
-            font=("Segoe UI", 13, "bold"),
+            font=("Segoe UI", 12, "bold"),
             fg_color="#059669",
             hover_color="#10b981",
             width=180,
@@ -638,10 +664,10 @@ class SaveBatchDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             btn_box,
             text="Cancel",
-            font=("Segoe UI", 12),
-            fg_color="#334155",
-            hover_color="#475569",
-            width=100,
+            font=("Segoe UI", 11),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            width=90,
             height=38,
             corner_radius=6,
             command=self.destroy,
