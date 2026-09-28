@@ -103,20 +103,39 @@ class DownloadManager:
         self.download_log = []
 
     @staticmethod
-    def find_cookie_file():
-        """Search all possible locations where cookies.txt might be located."""
+    def is_valid_youtube_cookie_file(path):
+        """Check if file exists and contains valid YouTube domain cookies."""
+        if not path or not os.path.isfile(path):
+            return False
+        try:
+            if os.path.getsize(path) < 10:
+                return False
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read(16384)
+                return 'youtube.com' in content or '.youtube.com' in content
+        except Exception:
+            return False
+
+    @classmethod
+    def find_cookie_file(cls):
+        """Search all possible locations for a valid YouTube cookies file (ignores Rumble/other sites)."""
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        home_dir = os.path.expanduser("~")
         candidates = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt"),
+            os.path.join(app_dir, "cookies.txt"),
+            os.path.join(app_dir, "youtube_cookies.txt"),
             os.path.abspath("cookies.txt"),
-            os.path.expanduser("~/cookies.txt"),
+            os.path.join(home_dir, "youtube_cookies.txt"),
+            os.path.join(home_dir, "cookies.txt"),
+            "/root/youtube_cookies.txt",
             "/root/cookies.txt",
-            os.path.expanduser("~/rumble-uploader/cookies.txt"),
-            "/root/rumble-uploader/cookies.txt",
-            os.path.join(os.path.expanduser("~"), "Desktop", "cookies.txt"),
-            os.path.join(os.path.expanduser("~"), "Downloads", "cookies.txt"),
+            os.path.join(home_dir, "Desktop", "youtube_cookies.txt"),
+            os.path.join(home_dir, "Desktop", "cookies.txt"),
+            os.path.join(home_dir, "Downloads", "youtube_cookies.txt"),
+            os.path.join(home_dir, "Downloads", "cookies.txt"),
         ]
         for p in candidates:
-            if os.path.exists(p) and os.path.isfile(p) and os.path.getsize(p) > 10:
+            if cls.is_valid_youtube_cookie_file(p):
                 return p
         return None
 
@@ -547,6 +566,11 @@ class DownloadManager:
 
             if status_callback:
                 status_callback(f"Starting batch download of {self.total_videos} videos...")
+                cookie_path = self.find_cookie_file()
+                if cookie_path:
+                    status_callback(f"🍪 Using YouTube Cookies: {os.path.basename(cookie_path)}")
+                else:
+                    status_callback("⚠️ No YouTube cookies active. (Click '🍪 Manage YouTube Cookies' if YouTube blocks with bot error)")
 
             clean_subfolder = self._sanitize_filename(subfolder) if subfolder else ""
 
@@ -663,19 +687,23 @@ class DownloadManager:
                                 status_callback(f"[{idx}/{self.total_videos}] ⚡ Already exists: {video_title}")
                     else:
                         last_err = logger.get_last_error() or f"Code {result}"
+                        if "bot" in last_err.lower() or "sign in" in last_err.lower():
+                            display_err = "Bot Check Triggered! (Add YouTube Cookies via button above)"
+                        else:
+                            display_err = last_err
                         self.failed_videos.append({
                             'title': video_title,
-                            'error': last_err,
+                            'error': display_err,
                         })
                         self.download_log.append({
                             'title': video_title,
                             'url': video_url,
                             'status': 'failed',
-                            'error': last_err,
+                            'error': display_err,
                             'time': datetime.now().strftime('%H:%M:%S'),
                         })
                         if status_callback:
-                            status_callback(f"[{idx}/{self.total_videos}] ❌ FAILED: {video_title} ({last_err})")
+                            status_callback(f"[{idx}/{self.total_videos}] ❌ FAILED: {video_title} ({display_err})")
 
                 except Exception as e:
                     error_msg = str(e)

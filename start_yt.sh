@@ -10,5 +10,8 @@ if [ -d "$DIR/venv" ]; then
     source "$DIR/venv/bin/activate"
 fi
 
-# 3. Launch application
+# 3. Keep yt-dlp updated to bypass latest YouTube bot detection patches
+pip install --upgrade yt-dlp --quiet 2>/dev/null || true
+
+# 4. Launch application
 python3 main.py

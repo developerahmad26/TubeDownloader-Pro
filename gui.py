@@ -571,9 +571,6 @@ class App(ctk.CTk):
             pass
 
     def _get_cookie_file_path(self):
-        found = DownloadManager.find_cookie_file()
-        if found:
-            return found
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 
     def _has_cookies(self):
@@ -582,27 +579,30 @@ class App(ctk.CTk):
     def _get_cookie_status_text(self):
         cookie_path = DownloadManager.find_cookie_file()
         if cookie_path:
-            return f"✅ Cookies Active: {os.path.basename(cookie_path)}"
-        return "⚠️ No Cookies Found (Click to Add)"
+            return f"✅ YouTube Cookies Active: {os.path.basename(cookie_path)}"
+        app_cookie = self._get_cookie_file_path()
+        if os.path.exists(app_cookie):
+            return "⚠️ cookies.txt found but NOT for YouTube (Click to update)"
+        return "⚠️ No YouTube Cookies (Click to Add / Bypass Bot Check)"
 
     def _update_cookie_status_label(self):
         if hasattr(self, 'cookie_status_label'):
             cookie_path = DownloadManager.find_cookie_file()
             if cookie_path:
                 self.cookie_status_label.configure(
-                    text=f"✅ Cookies Active: {os.path.basename(cookie_path)}",
+                    text=f"✅ YouTube Cookies Active: {os.path.basename(cookie_path)}",
                     text_color="#2ECC71"
                 )
             else:
                 self.cookie_status_label.configure(
-                    text="⚠️ No Cookies Loaded (Click to Add / Fix 403 & Bot Errors)",
+                    text=self._get_cookie_status_text(),
                     text_color="#F39C12"
                 )
 
     def _open_cookie_manager(self):
         top = ctk.CTkToplevel(self)
         top.title("🍪 YouTube Cookies Manager (Fix Bot & 403 Errors)")
-        top.geometry("640x550")
+        top.geometry("660x570")
         top.transient(self)
         top.grab_set()
 
@@ -612,22 +612,23 @@ class App(ctk.CTk):
         ).pack(padx=20, pady=(15, 5))
 
         info_msg = (
-            "YouTube datacenter / VPS IP addresses ko automated bot samajh kar block karta hai.\n"
-            "Apne browser ke YouTube cookies import karne se ye error 100% permanently solve ho jata hai!\n\n"
+            "YouTube datacenter / VPS IP addresses par automated bot check lagata hai.\n"
+            "Apne computer ke browser se YouTube cookies yahan paste karne se bot error 100% solve ho jata hai!\n\n"
+            "⚠️ Dhyan dein: Rumble uploader ke cookies alag hote hain! YouTube ke liye youtube.com ke cookies hone chahiye.\n\n"
             "Kaise Karein:\n"
-            "1. Apne computer ke Chrome browser me 'Get cookies.txt LOCALLY' extension install karein.\n"
-            "2. youtube.com open karein aur extension se cookies Copy ya Export karein.\n"
-            "3. Yahan niche box me paste karein ya file Browse karein, aur 'Save Cookies' dabayein."
+            "1. Apne browser me 'Get cookies.txt LOCALLY' extension install karein.\n"
+            "2. youtube.com open karein aur extension se cookies Copy karein.\n"
+            "3. Yahan box me paste karein aur 'Save Cookies' dabayein."
         )
         ctk.CTkLabel(
             top, text=info_msg, font=("Segoe UI", 11),
-            text_color="#cccccc", justify="left", wraplength=600
+            text_color="#cccccc", justify="left", wraplength=620
         ).pack(padx=20, pady=(0, 10))
 
-        text_box = ctk.CTkTextbox(top, width=600, height=220, font=("Consolas", 11))
+        text_box = ctk.CTkTextbox(top, width=620, height=220, font=("Consolas", 11))
         text_box.pack(padx=20, pady=5)
 
-        cookie_path = self._get_cookie_file_path()
+        cookie_path = DownloadManager.find_cookie_file() or self._get_cookie_file_path()
         if os.path.exists(cookie_path):
             try:
                 with open(cookie_path, "r", encoding="utf-8") as f:
@@ -641,7 +642,7 @@ class App(ctk.CTk):
 
         def browse_file():
             fn = filedialog.askopenfilename(
-                title="Select cookies.txt file",
+                title="Select YouTube cookies.txt file",
                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
             )
             if fn:
@@ -658,19 +659,32 @@ class App(ctk.CTk):
             if not content:
                 messagebox.showwarning("Warning", "Please paste cookies or browse a file first.")
                 return
+
+            if "youtube.com" not in content and ".youtube.com" not in content:
+                confirm = messagebox.askyesno(
+                    "Warning: Not YouTube Cookies?",
+                    "Is text me 'youtube.com' domain ke cookies nahi mile!\n\n"
+                    "Dhyan dein: Rumble ya kisi doosri site ke cookies YouTube par kaam nahi karenge aur 'Sign in bot' error aayega.\n\n"
+                    "Kya aap phir bhi ise save karna chahte hain?"
+                )
+                if not confirm:
+                    return
+
             try:
-                with open(cookie_path, "w", encoding="utf-8") as f:
+                target_path = self._get_cookie_file_path()
+                with open(target_path, "w", encoding="utf-8") as f:
                     f.write(content + "\n")
                 self._update_cookie_status_label()
-                messagebox.showinfo("Success", "✅ Cookies successfully saved! Bot protection bypassed.")
+                messagebox.showinfo("Success", "✅ YouTube cookies successfully saved! Bot protection bypassed.")
                 top.destroy()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save cookies: {e}")
 
         def clear_cookies():
-            if os.path.exists(cookie_path):
+            target_path = self._get_cookie_file_path()
+            if os.path.exists(target_path):
                 try:
-                    os.remove(cookie_path)
+                    os.remove(target_path)
                 except Exception:
                     pass
             text_box.delete("1.0", "end")
