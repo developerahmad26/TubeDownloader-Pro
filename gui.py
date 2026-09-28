@@ -312,25 +312,33 @@ class App(ctk.CTk):
             self._refresh_settings_view()
 
     def _build_downloads_view(self):
-        """Build the dedicated Downloads Studio view with a clear, professional card-based structure."""
+        """Build the dedicated Downloads Studio view with a clear, compact, professional card-based structure."""
         # ================= Card 1: Media Source & Input =================
-        source_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
-        source_card.pack(fill="x", pady=(0, 10))
+        source_card = ctk.CTkFrame(self.downloads_view, corner_radius=10, fg_color="#141822", border_width=1, border_color="#242b3d")
+        source_card.pack(fill="x", pady=(0, 8))
 
         s_head = ctk.CTkFrame(source_card, fg_color="transparent")
-        s_head.pack(fill="x", padx=15, pady=(10, 4))
+        s_head.pack(fill="x", padx=15, pady=(8, 2))
         ctk.CTkLabel(
             s_head, text="🔗 Media Source & Video Input",
-            font=("Segoe UI", 14, "bold")
+            font=("Segoe UI", 14, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
         ctk.CTkLabel(
             s_head, text="— Select single video, playlist, or full channel",
-            font=("Segoe UI", 11), text_color="gray"
+            font=("Segoe UI", 11), text_color="#94a3b8"
         ).pack(side="left", padx=8)
 
-        # Tab View for Single, Playlist, Channel inside Card 1
-        self.tabview = ctk.CTkTabview(source_card, height=185)
-        self.tabview.pack(fill="x", padx=10, pady=(0, 10))
+        # Tab View for Single, Playlist, Channel inside Card 1 (Compact & Sleek)
+        self.tabview = ctk.CTkTabview(
+            source_card, height=120, fg_color="#0e1118",
+            segmented_button_fg_color="#0b0e14",
+            segmented_button_selected_color="#0284c7",
+            segmented_button_selected_hover_color="#0369a1",
+            segmented_button_unselected_color="#181c26",
+            segmented_button_unselected_hover_color="#252b3b",
+            corner_radius=8
+        )
+        self.tabview.pack(fill="x", padx=12, pady=(0, 8))
 
         self.tab_single = self.tabview.add("📹 Single Video")
         self.tab_playlist = self.tabview.add("📋 Playlist")
@@ -341,69 +349,69 @@ class App(ctk.CTk):
         self._build_channel_tab()
 
         # ================= Card 2: Download Configuration & Storage =================
-        config_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
-        config_card.pack(fill="x", pady=(0, 10))
+        config_card = ctk.CTkFrame(self.downloads_view, corner_radius=10, fg_color="#141822", border_width=1, border_color="#242b3d")
+        config_card.pack(fill="x", pady=(0, 8))
 
         c_head = ctk.CTkFrame(config_card, fg_color="transparent")
-        c_head.pack(fill="x", padx=15, pady=(10, 4))
+        c_head.pack(fill="x", padx=15, pady=(8, 4))
         ctk.CTkLabel(
             c_head, text="⚙️ Download Configuration & Preferences",
-            font=("Segoe UI", 14, "bold")
+            font=("Segoe UI", 14, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
 
         # Two-column layout inside config card
         columns_frame = ctk.CTkFrame(config_card, fg_color="transparent")
-        columns_frame.pack(fill="x", padx=15, pady=(0, 6))
+        columns_frame.pack(fill="x", padx=12, pady=(0, 6))
 
         # Col 1: Format & Stream settings
-        col1 = ctk.CTkFrame(columns_frame, fg_color="#1c1f26", corner_radius=6)
-        col1.pack(side="left", fill="both", expand=True, padx=(0, 6), pady=4)
+        col1 = ctk.CTkFrame(columns_frame, fg_color="#0e1118", corner_radius=8, border_width=1, border_color="#1e2433")
+        col1.pack(side="left", fill="both", expand=True, padx=(0, 4), pady=2)
 
-        ctk.CTkLabel(col1, text="Stream & Format", font=("Segoe UI", 12, "bold"), text_color="#17a2b8").pack(anchor="w", padx=12, pady=(8, 4))
+        ctk.CTkLabel(col1, text="Stream & Format", font=("Segoe UI", 12, "bold"), text_color="#38bdf8").pack(anchor="w", padx=12, pady=(8, 4))
 
         row_qf = ctk.CTkFrame(col1, fg_color="transparent")
-        row_qf.pack(fill="x", padx=12, pady=4)
-        ctk.CTkLabel(row_qf, text="Quality:", width=60, anchor="w").pack(side="left")
+        row_qf.pack(fill="x", padx=12, pady=3)
+        ctk.CTkLabel(row_qf, text="Quality:", width=55, anchor="w", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left")
         self.quality_var = ctk.StringVar(value=self.app_settings.get("default_quality", "Best Quality"))
-        ctk.CTkOptionMenu(row_qf, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=180).pack(side="left", padx=4)
+        ctk.CTkOptionMenu(row_qf, variable=self.quality_var, values=list(QUALITY_OPTIONS.keys()), width=180, corner_radius=6).pack(side="left", padx=4)
 
-        ctk.CTkLabel(row_qf, text="Format:", width=50, anchor="w").pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(row_qf, text="Format:", width=50, anchor="w", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left", padx=(10, 0))
         self.format_var = ctk.StringVar(value=self.app_settings.get("default_format", "mp4"))
-        ctk.CTkOptionMenu(row_qf, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90).pack(side="left", padx=4)
+        ctk.CTkOptionMenu(row_qf, variable=self.format_var, values=VIDEO_FORMATS + AUDIO_FORMATS, width=90, corner_radius=6).pack(side="left", padx=4)
 
         row_cb1 = ctk.CTkFrame(col1, fg_color="transparent")
-        row_cb1.pack(fill="x", padx=12, pady=(6, 8))
+        row_cb1.pack(fill="x", padx=12, pady=(4, 8))
         self.thumbnail_var = ctk.BooleanVar(value=self.app_settings.get("default_embed_thumbnail", False))
         ctk.CTkCheckBox(row_cb1, text="🖼️ Embed Thumbnail", variable=self.thumbnail_var).pack(side="left", padx=(0, 10))
 
         self.subtitle_var = ctk.BooleanVar(value=self.app_settings.get("default_download_subtitles", False))
         ctk.CTkCheckBox(row_cb1, text="💬 Subtitles", variable=self.subtitle_var).pack(side="left", padx=4)
-        self.subtitle_lang_entry = ctk.CTkEntry(row_cb1, placeholder_text="en", width=50)
+        self.subtitle_lang_entry = ctk.CTkEntry(row_cb1, placeholder_text="en", width=50, fg_color="#0b0e14", border_color="#2d3748")
         self.subtitle_lang_entry.insert(0, self.app_settings.get("default_subtitle_lang", "en"))
         self.subtitle_lang_entry.pack(side="left", padx=4)
         self._attach_entry_context_menu(self.subtitle_lang_entry)
 
         # Col 2: Naming & File Organization
-        col2 = ctk.CTkFrame(columns_frame, fg_color="#1c1f26", corner_radius=6)
-        col2.pack(side="right", fill="both", expand=True, padx=(6, 0), pady=4)
+        col2 = ctk.CTkFrame(columns_frame, fg_color="#0e1118", corner_radius=8, border_width=1, border_color="#1e2433")
+        col2.pack(side="right", fill="both", expand=True, padx=(4, 0), pady=2)
 
-        ctk.CTkLabel(col2, text="Naming & Organization", font=("Segoe UI", 12, "bold"), text_color="#38bdf8").pack(anchor="w", padx=12, pady=(8, 4))
+        ctk.CTkLabel(col2, text="Naming & Organization", font=("Segoe UI", 12, "bold"), text_color="#c084fc").pack(anchor="w", padx=12, pady=(8, 4))
 
         row_name = ctk.CTkFrame(col2, fg_color="transparent")
-        row_name.pack(fill="x", padx=12, pady=4)
-        ctk.CTkLabel(row_name, text="Naming:", width=60, anchor="w").pack(side="left")
+        row_name.pack(fill="x", padx=12, pady=3)
+        ctk.CTkLabel(row_name, text="Naming:", width=55, anchor="w", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left")
         self.naming_var = ctk.StringVar(value=self.app_settings.get("default_naming_scheme", "Numbered + Rewrite Title (01 - Cleaned)"))
-        ctk.CTkOptionMenu(row_name, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=215).pack(side="left", padx=4)
+        ctk.CTkOptionMenu(row_name, variable=self.naming_var, values=list(NAMING_SCHEMES.keys()), width=215, corner_radius=6).pack(side="left", padx=4)
         ctk.CTkButton(
             row_name, text="⚙️ Rules", width=65, height=28,
-            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 11, "bold"),
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=self._open_title_rules_dialog
         ).pack(side="left", padx=4)
 
         row_pref = ctk.CTkFrame(col2, fg_color="transparent")
         row_pref.pack(fill="x", padx=12, pady=(4, 8))
-        ctk.CTkLabel(row_pref, text="Prefix:", width=50, anchor="w").pack(side="left")
-        self.prefix_entry = ctk.CTkEntry(row_pref, placeholder_text="e.g. MyVideo", width=120)
+        ctk.CTkLabel(row_pref, text="Prefix:", width=45, anchor="w", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left")
+        self.prefix_entry = ctk.CTkEntry(row_pref, placeholder_text="e.g. MyVideo", width=120, fg_color="#0b0e14", border_color="#2d3748")
         self.prefix_entry.insert(0, self.app_settings.get("default_custom_prefix", ""))
         self.prefix_entry.pack(side="left", padx=4)
         self._attach_entry_context_menu(self.prefix_entry)
@@ -411,90 +419,91 @@ class App(ctk.CTk):
         self.subfolder_var = ctk.BooleanVar(value=self.app_settings.get("default_auto_subfolder", True))
         ctk.CTkCheckBox(row_pref, text="📂 Auto Subfolder", variable=self.subfolder_var).pack(side="left", padx=(10, 0))
 
-        # Bottom Strip inside config card: Save Directory & Cookies row
-        storage_strip = ctk.CTkFrame(config_card, fg_color="transparent")
-        storage_strip.pack(fill="x", padx=15, pady=(2, 10))
+        # Bottom Strip inside config card: Dedicated Storage & Anti-bot Box
+        storage_box = ctk.CTkFrame(config_card, fg_color="#0e1118", corner_radius=8, border_width=1, border_color="#1e2433")
+        storage_box.pack(fill="x", padx=12, pady=(2, 10))
 
         # Save Directory row
-        dir_row = ctk.CTkFrame(storage_strip, fg_color="transparent")
-        dir_row.pack(fill="x", pady=2)
-        ctk.CTkLabel(dir_row, text="📁 Save Directory:", font=("Segoe UI", 12, "bold"), width=120, anchor="w").pack(side="left")
+        dir_row = ctk.CTkFrame(storage_box, fg_color="transparent")
+        dir_row.pack(fill="x", padx=12, pady=(8, 4))
+        ctk.CTkLabel(dir_row, text="📁 Save Directory:", font=("Segoe UI", 12, "bold"), text_color="#cbd5e1", width=120, anchor="w").pack(side="left")
         self.dir_var = ctk.StringVar(value=self.app_settings.get("default_download_dir", DEFAULT_DOWNLOAD_DIR))
-        self.dir_entry = ctk.CTkEntry(dir_row, textvariable=self.dir_var, width=520)
+        self.dir_entry = ctk.CTkEntry(dir_row, textvariable=self.dir_var, width=520, fg_color="#0b0e14", border_color="#2d3748")
         self.dir_entry.pack(side="left", padx=5, fill="x", expand=True)
         self._attach_entry_context_menu(self.dir_entry)
-        ctk.CTkButton(dir_row, text="Browse", width=80, command=self._browse_dir).pack(side="left", padx=3)
-        ctk.CTkButton(dir_row, text="📂 Open", width=80, command=self._open_download_dir).pack(side="left", padx=3)
+        ctk.CTkButton(dir_row, text="Browse", width=80, fg_color="#334155", hover_color="#475569", corner_radius=6, command=self._browse_dir).pack(side="left", padx=3)
+        ctk.CTkButton(dir_row, text="📂 Open", width=80, fg_color="#1e293b", hover_color="#334155", corner_radius=6, command=self._open_download_dir).pack(side="left", padx=3)
 
         # Cookies & Speed limit row
-        extra_row = ctk.CTkFrame(storage_strip, fg_color="transparent")
-        extra_row.pack(fill="x", pady=(6, 0))
+        extra_row = ctk.CTkFrame(storage_box, fg_color="transparent")
+        extra_row.pack(fill="x", padx=12, pady=(4, 8))
 
         ctk.CTkButton(
             extra_row, text="🍪 YouTube Cookies", width=160, height=28,
-            command=self._open_cookie_manager, fg_color="#1F6AA5", hover_color="#144870"
-        ).pack(side="left", padx=(0, 8))
+            command=self._open_cookie_manager, fg_color="#0284c7", hover_color="#0369a1",
+            font=("Segoe UI", 11, "bold"), corner_radius=6
+        ).pack(side="left", padx=(0, 10))
 
         self.cookie_status_label = ctk.CTkLabel(
             extra_row, text=self._get_cookie_status_text(),
-            font=("Segoe UI", 11), text_color="#2ECC71" if self._has_cookies() else "#F39C12"
+            font=("Segoe UI", 11, "bold"), text_color="#34d399" if self._has_cookies() else "#fbbf24"
         )
         self.cookie_status_label.pack(side="left")
 
         speed_box = ctk.CTkFrame(extra_row, fg_color="transparent")
         speed_box.pack(side="right")
-        ctk.CTkLabel(speed_box, text="Speed Limit:").pack(side="left", padx=4)
-        self.speed_entry = ctk.CTkEntry(speed_box, placeholder_text="0", width=80)
+        ctk.CTkLabel(speed_box, text="Speed Limit:", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left", padx=4)
+        self.speed_entry = ctk.CTkEntry(speed_box, placeholder_text="0", width=80, fg_color="#0b0e14", border_color="#2d3748")
         self.speed_entry.insert(0, self.app_settings.get("default_speed_limit", ""))
         self.speed_entry.pack(side="left")
         self._attach_entry_context_menu(self.speed_entry)
-        ctk.CTkLabel(speed_box, text="KB/s (0=unlimited)", text_color="gray").pack(side="left", padx=4)
+        ctk.CTkLabel(speed_box, text="KB/s (0=unlimited)", font=("Segoe UI", 10), text_color="gray").pack(side="left", padx=4)
 
         # ================= Card 3: Action & Live Progress Center =================
-        action_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
-        action_card.pack(fill="x", pady=(0, 10))
+        action_card = ctk.CTkFrame(self.downloads_view, corner_radius=10, fg_color="#141822", border_width=1, border_color="#242b3d")
+        action_card.pack(fill="x", pady=(0, 8))
 
         act_inner = ctk.CTkFrame(action_card, fg_color="transparent")
         act_inner.pack(fill="x", padx=15, pady=12)
 
-        # Primary Buttons Row
+        # Primary Buttons Row with modern SaaS styling
         btns_row = ctk.CTkFrame(act_inner, fg_color="transparent")
         btns_row.pack(fill="x", pady=(0, 8))
 
         self.download_btn = ctk.CTkButton(
-            btns_row, text="⬇️  Start Download", width=190, height=46,
-            font=("Segoe UI", 15, "bold"),
-            fg_color="#28a745", hover_color="#218838",
+            btns_row, text="⬇️  Start Download", width=185, height=42,
+            font=("Segoe UI", 13, "bold"),
+            fg_color="#059669", hover_color="#10b981", corner_radius=8,
             command=self._start_download
         )
         self.download_btn.pack(side="left", padx=(0, 6))
 
         self.cancel_btn = ctk.CTkButton(
-            btns_row, text="❌ Cancel", width=110, height=46,
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#dc3545", hover_color="#c82333",
+            btns_row, text="❌ Cancel", width=105, height=42,
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#450a0a", hover_color="#991b1b", text_color="#fca5a5", corner_radius=8,
             command=self._cancel_download, state="disabled"
         )
         self.cancel_btn.pack(side="left", padx=4)
 
         self.save_batch_btn = ctk.CTkButton(
-            btns_row, text="💾 Save as Batch", width=150, height=46,
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#17a2b8", hover_color="#138496",
+            btns_row, text="💾 Save as Batch", width=150, height=42,
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#0284c7", hover_color="#0369a1", corner_radius=8,
             command=self._save_current_as_batch
         )
         self.save_batch_btn.pack(side="left", padx=4)
 
         self.schedule_btn = ctk.CTkButton(
-            btns_row, text="⏰ Schedule Setup", width=150, height=46,
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#6f42c1", hover_color="#59359a",
+            btns_row, text="⏰ Schedule Setup", width=160, height=42,
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#6366f1", hover_color="#4f46e5", corner_radius=8,
             command=self._schedule_current_download
         )
         self.schedule_btn.pack(side="left", padx=4)
 
         self.counter_label = ctk.CTkLabel(
-            btns_row, text="", font=("Segoe UI", 12, "bold"), text_color="#17a2b8"
+            btns_row, text="", font=("Segoe UI", 11, "bold"), text_color="#34d399"
         )
         self.counter_label.pack(side="right", padx=6)
 
@@ -585,152 +594,160 @@ class App(ctk.CTk):
     # ==================== Tab builders ====================
 
     def _build_single_tab(self):
-        """Build Single Video tab."""
+        """Build Single Video tab with unified compact input row."""
         ctk.CTkLabel(
             self.tab_single, text="Enter YouTube Video URL:",
-            font=("Segoe UI", 13, "bold")
-        ).pack(anchor="w", padx=10, pady=(10, 5))
+            font=("Segoe UI", 11, "bold"), text_color="#cbd5e1"
+        ).pack(anchor="w", padx=6, pady=(4, 2))
+
+        url_frame = ctk.CTkFrame(self.tab_single, fg_color="transparent")
+        url_frame.pack(fill="x", padx=6, pady=2)
 
         self.single_url_entry = ctk.CTkEntry(
-            self.tab_single,
+            url_frame,
             placeholder_text="https://www.youtube.com/watch?v=...",
-            height=38, font=("Segoe UI", 13)
+            height=34, font=("Segoe UI", 12), fg_color="#0b0e14", border_color="#2d3748"
         )
-        self.single_url_entry.pack(fill="x", padx=10, pady=5)
+        self.single_url_entry.pack(side="left", fill="x", expand=True)
         self._attach_entry_context_menu(self.single_url_entry)
 
-        btn_frame = ctk.CTkFrame(self.tab_single, fg_color="transparent")
-        btn_frame.pack(anchor="w", padx=10, pady=5)
+        ctk.CTkButton(
+            url_frame, text="📋 Paste", width=80, height=34,
+            fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 11, "bold"), corner_radius=6,
+            command=lambda: self._paste_clipboard(self.single_url_entry)
+        ).pack(side="left", padx=5)
 
         ctk.CTkButton(
-            btn_frame, text="ℹ️ Fetch Info", width=140,
+            url_frame, text="ℹ️ Fetch Info", width=125, height=34,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=self._fetch_single_info
         ).pack(side="left")
 
-        ctk.CTkButton(
-            btn_frame, text="📋 Paste", width=80,
-            command=lambda: self._paste_clipboard(self.single_url_entry)
-        ).pack(side="left", padx=10)
-
         self.single_info_label = ctk.CTkLabel(
             self.tab_single, text="", font=("Segoe UI", 11),
-            text_color="#aaaaaa", wraplength=700, justify="left"
+            text_color="#38bdf8", wraplength=700, justify="left"
         )
-        self.single_info_label.pack(anchor="w", padx=10, pady=5)
+        self.single_info_label.pack(anchor="w", padx=6, pady=(3, 0))
 
     def _build_playlist_tab(self):
-        """Build Playlist tab."""
+        """Build Playlist tab with tight, compact layout."""
         ctk.CTkLabel(
             self.tab_playlist, text="Enter YouTube Playlist URL:",
-            font=("Segoe UI", 13, "bold")
-        ).pack(anchor="w", padx=10, pady=(10, 5))
+            font=("Segoe UI", 11, "bold"), text_color="#cbd5e1"
+        ).pack(anchor="w", padx=6, pady=(4, 2))
 
         url_frame = ctk.CTkFrame(self.tab_playlist, fg_color="transparent")
-        url_frame.pack(fill="x", padx=10, pady=5)
+        url_frame.pack(fill="x", padx=6, pady=2)
 
         self.playlist_url_entry = ctk.CTkEntry(
             url_frame,
             placeholder_text="https://www.youtube.com/playlist?list=...",
-            height=38, font=("Segoe UI", 13)
+            height=34, font=("Segoe UI", 12), fg_color="#0b0e14", border_color="#2d3748"
         )
         self.playlist_url_entry.pack(side="left", fill="x", expand=True)
         self._attach_entry_context_menu(self.playlist_url_entry)
 
         ctk.CTkButton(
-            url_frame, text="📋 Paste", width=80,
+            url_frame, text="📋 Paste", width=80, height=34,
+            fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=lambda: self._paste_clipboard(self.playlist_url_entry)
         ).pack(side="left", padx=5)
 
         ctk.CTkButton(
-            url_frame, text="🔍 Fetch Videos", width=140,
+            url_frame, text="🔍 Fetch Videos", width=125, height=34,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=lambda: self._fetch_batch_info("playlist")
-        ).pack(side="left", padx=5)
+        ).pack(side="left")
 
-        # Selection
+        # Selection row
         sel_frame = ctk.CTkFrame(self.tab_playlist, fg_color="transparent")
-        sel_frame.pack(fill="x", padx=10, pady=5)
+        sel_frame.pack(fill="x", padx=6, pady=(3, 2))
 
-        ctk.CTkLabel(sel_frame, text="Selection:").pack(side="left", padx=5)
+        ctk.CTkLabel(sel_frame, text="Selection:", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left", padx=(0, 4))
         self.playlist_sel_var = ctk.StringVar(value="All Videos")
         ctk.CTkOptionMenu(
             sel_frame, variable=self.playlist_sel_var,
-            values=list(SELECTION_MODES.keys()), width=200
-        ).pack(side="left", padx=5)
+            values=list(SELECTION_MODES.keys()), width=180, height=28, corner_radius=6
+        ).pack(side="left", padx=4)
 
-        ctk.CTkLabel(sel_frame, text="Value:").pack(side="left", padx=5)
+        ctk.CTkLabel(sel_frame, text="Value:", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left", padx=(8, 4))
         self.playlist_sel_value = ctk.CTkEntry(
-            sel_frame, placeholder_text="e.g., 1-10 or 1,3,5", width=130
+            sel_frame, placeholder_text="e.g., 1-10 or 1,3,5", width=120, height=28, fg_color="#0b0e14", border_color="#2d3748"
         )
-        self.playlist_sel_value.pack(side="left", padx=5)
+        self.playlist_sel_value.pack(side="left", padx=4)
         self._attach_entry_context_menu(self.playlist_sel_value)
 
         ctk.CTkButton(
-            sel_frame, text="👁️ Preview & Select", width=150,
+            sel_frame, text="👁️ Preview & Select", width=145, height=28,
+            fg_color="#6366f1", hover_color="#4f46e5", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=lambda: self._show_video_list("playlist")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=6)
 
         self.playlist_info_label = ctk.CTkLabel(
             self.tab_playlist, text="", font=("Segoe UI", 11),
-            text_color="#aaaaaa", wraplength=700, justify="left"
+            text_color="#38bdf8", wraplength=700, justify="left"
         )
-        self.playlist_info_label.pack(anchor="w", padx=10, pady=5)
+        self.playlist_info_label.pack(anchor="w", padx=6, pady=(2, 0))
 
     def _build_channel_tab(self):
-        """Build Channel tab."""
+        """Build Channel tab with tight, compact layout."""
         ctk.CTkLabel(
             self.tab_channel, text="Enter YouTube Channel URL:",
-            font=("Segoe UI", 13, "bold")
-        ).pack(anchor="w", padx=10, pady=(10, 5))
+            font=("Segoe UI", 11, "bold"), text_color="#cbd5e1"
+        ).pack(anchor="w", padx=6, pady=(4, 2))
 
         url_frame = ctk.CTkFrame(self.tab_channel, fg_color="transparent")
-        url_frame.pack(fill="x", padx=10, pady=5)
+        url_frame.pack(fill="x", padx=6, pady=2)
 
         self.channel_url_entry = ctk.CTkEntry(
             url_frame,
             placeholder_text="https://www.youtube.com/@channelname/videos",
-            height=38, font=("Segoe UI", 13)
+            height=34, font=("Segoe UI", 12), fg_color="#0b0e14", border_color="#2d3748"
         )
         self.channel_url_entry.pack(side="left", fill="x", expand=True)
         self._attach_entry_context_menu(self.channel_url_entry)
 
         ctk.CTkButton(
-            url_frame, text="📋 Paste", width=80,
+            url_frame, text="📋 Paste", width=80, height=34,
+            fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=lambda: self._paste_clipboard(self.channel_url_entry)
         ).pack(side="left", padx=5)
 
         ctk.CTkButton(
-            url_frame, text="🔍 Fetch Videos", width=140,
+            url_frame, text="🔍 Fetch Videos", width=125, height=34,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=lambda: self._fetch_batch_info("channel")
-        ).pack(side="left", padx=5)
+        ).pack(side="left")
 
-        # Selection
+        # Selection row
         sel_frame = ctk.CTkFrame(self.tab_channel, fg_color="transparent")
-        sel_frame.pack(fill="x", padx=10, pady=5)
+        sel_frame.pack(fill="x", padx=6, pady=(3, 2))
 
-        ctk.CTkLabel(sel_frame, text="Selection:").pack(side="left", padx=5)
+        ctk.CTkLabel(sel_frame, text="Selection:", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left", padx=(0, 4))
         self.channel_sel_var = ctk.StringVar(value="All Videos")
         ctk.CTkOptionMenu(
             sel_frame, variable=self.channel_sel_var,
-            values=list(SELECTION_MODES.keys()), width=200
-        ).pack(side="left", padx=5)
+            values=list(SELECTION_MODES.keys()), width=180, height=28, corner_radius=6
+        ).pack(side="left", padx=4)
 
-        ctk.CTkLabel(sel_frame, text="Value:").pack(side="left", padx=5)
+        ctk.CTkLabel(sel_frame, text="Value:", font=("Segoe UI", 11, "bold"), text_color="#cbd5e1").pack(side="left", padx=(8, 4))
         self.channel_sel_value = ctk.CTkEntry(
-            sel_frame, placeholder_text="e.g., 1-10 or 5", width=130
+            sel_frame, placeholder_text="e.g., 1-10 or 5", width=120, height=28, fg_color="#0b0e14", border_color="#2d3748"
         )
-        self.channel_sel_value.pack(side="left", padx=5)
+        self.channel_sel_value.pack(side="left", padx=4)
         self._attach_entry_context_menu(self.channel_sel_value)
 
         ctk.CTkButton(
-            sel_frame, text="👁️ Preview & Select", width=150,
+            sel_frame, text="👁️ Preview & Select", width=145, height=28,
+            fg_color="#6366f1", hover_color="#4f46e5", font=("Segoe UI", 11, "bold"), corner_radius=6,
             command=lambda: self._show_video_list("channel")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=6)
 
         self.channel_info_label = ctk.CTkLabel(
             self.tab_channel, text="", font=("Segoe UI", 11),
-            text_color="#aaaaaa", wraplength=700, justify="left"
+            text_color="#38bdf8", wraplength=700, justify="left"
         )
-        self.channel_info_label.pack(anchor="w", padx=10, pady=5)
+        self.channel_info_label.pack(anchor="w", padx=6, pady=(2, 0))
 
     def _open_title_rules_dialog(self):
         """Open modal dialog to view and customize Title Rewrite Rules."""
