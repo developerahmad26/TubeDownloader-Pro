@@ -165,14 +165,26 @@ class App(ctk.CTk):
         self.geometry("1020x840")
         self.minsize(940, 720)
 
-        # Set window and taskbar icon
+        # Set window and taskbar icon (Cross-platform safe)
         try:
             if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-                icon_path = os.path.join(sys._MEIPASS, "assets", "icon.ico")
+                assets_dir = os.path.join(sys._MEIPASS, "assets")
             else:
-                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
-            if os.path.exists(icon_path):
-                self.iconbitmap(icon_path)
+                assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+            ico_path = os.path.join(assets_dir, "icon.ico")
+            png_path = os.path.join(assets_dir, "icon.png")
+
+            if sys.platform.startswith("win"):
+                if os.path.exists(ico_path):
+                    self.iconbitmap(ico_path)
+            else:
+                if os.path.exists(png_path):
+                    from PIL import ImageTk
+                    p_img = Image.open(png_path)
+                    photo = ImageTk.PhotoImage(p_img)
+                    self.iconphoto(False, photo)
+                    self._icon_photo_ref = photo
         except Exception:
             pass
 
