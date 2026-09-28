@@ -396,7 +396,8 @@ class DownloadManager:
         return videos, playlist_title, total_count
 
     def _get_output_template(self, naming_scheme, custom_prefix="", index=1,
-                              download_dir=DEFAULT_DOWNLOAD_DIR, subfolder=""):
+                              download_dir=DEFAULT_DOWNLOAD_DIR, subfolder="",
+                              video_title=None, video_id=""):
         """Generate output template based on naming scheme."""
         base_dir = download_dir
         if subfolder:
@@ -406,19 +407,37 @@ class DownloadManager:
         os.makedirs(base_dir, exist_ok=True)
 
         # Unique suffix with video ID guarantees no file collision/overwrite
-        unique_suffix = " [%(id)s]"
+        unique_suffix = f" [{video_id}]" if video_id else " [%(id)s]"
+
+        from title_rewriter import rewrite_title
 
         if naming_scheme == "title":
+            return base_dir, os.path.join(base_dir, f"%(title).80s{unique_suffix}.%(ext)s")
+        elif naming_scheme == "rewrite_title":
+            if video_title:
+                clean_t = self._sanitize_filename(rewrite_title(video_title))[:80]
+                return base_dir, os.path.join(base_dir, f"{clean_t}{unique_suffix}.%(ext)s")
             return base_dir, os.path.join(base_dir, f"%(title).80s{unique_suffix}.%(ext)s")
         elif naming_scheme == "numbered":
             return base_dir, os.path.join(base_dir, f"{index:03d}.%(ext)s")
         elif naming_scheme == "numbered_title":
+            return base_dir, os.path.join(base_dir, f"{index:03d} - %(title).80s{unique_suffix}.%(ext)s")
+        elif naming_scheme == "numbered_rewrite_title":
+            if video_title:
+                clean_t = self._sanitize_filename(rewrite_title(video_title))[:80]
+                return base_dir, os.path.join(base_dir, f"{index:03d} - {clean_t}{unique_suffix}.%(ext)s")
             return base_dir, os.path.join(base_dir, f"{index:03d} - %(title).80s{unique_suffix}.%(ext)s")
         elif naming_scheme == "custom_numbered":
             prefix = self._sanitize_filename(custom_prefix) if custom_prefix else "video"
             return base_dir, os.path.join(base_dir, f"{prefix}_{index:03d}.%(ext)s")
         elif naming_scheme == "custom_title":
             prefix = self._sanitize_filename(custom_prefix) if custom_prefix else "video"
+            return base_dir, os.path.join(base_dir, f"{prefix} - %(title).80s{unique_suffix}.%(ext)s")
+        elif naming_scheme == "custom_rewrite_title":
+            prefix = self._sanitize_filename(custom_prefix) if custom_prefix else "video"
+            if video_title:
+                clean_t = self._sanitize_filename(rewrite_title(video_title))[:80]
+                return base_dir, os.path.join(base_dir, f"{prefix} - {clean_t}{unique_suffix}.%(ext)s")
             return base_dir, os.path.join(base_dir, f"{prefix} - %(title).80s{unique_suffix}.%(ext)s")
         else:
             return base_dir, os.path.join(base_dir, f"%(title).80s{unique_suffix}.%(ext)s")
@@ -540,8 +559,19 @@ class DownloadManager:
         self.completed_videos = 0
 
         try:
+            video_title = None
+            video_id = ""
+            if "rewrite" in naming_scheme:
+                if status_callback:
+                    status_callback("Fetching video metadata for title rewrite...")
+                info = self.fetch_info(url, flat=True)
+                if info:
+                    video_title = info.get('title')
+                    video_id = info.get('id', '')
+
             base_dir, output_template = self._get_output_template(
-                naming_scheme, custom_prefix, 1, download_dir
+                naming_scheme, custom_prefix, 1, download_dir,
+                video_title=video_title, video_id=video_id
             )
 
             files_before = self._get_files_in_dir(base_dir)
@@ -724,7 +754,8 @@ class DownloadManager:
                     video_url = f"https://www.youtube.com/watch?v={video_url}"
 
                 base_dir, output_template = self._get_output_template(
-                    naming_scheme, custom_prefix, idx, download_dir, clean_subfolder
+                    naming_scheme, custom_prefix, idx, download_dir, clean_subfolder,
+                    video_title=video_title, video_id=video_id
                 )
 
                 # Snapshot existing files before download

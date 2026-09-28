@@ -23,11 +23,18 @@ QUALITY_OPTIONS = {
 # Naming schemes
 NAMING_SCHEMES = {
     "Video Title": "title",
+    "Rewrite Title (Cleaned)": "rewrite_title",
     "Numbered (1, 2, 3...)": "numbered",
     "Numbered + Title (01 - Title)": "numbered_title",
+    "Numbered + Rewrite Title (01 - Cleaned)": "numbered_rewrite_title",
     "Custom Prefix + Number": "custom_numbered",
     "Custom Prefix + Title": "custom_title",
+    "Custom Prefix + Rewrite Title": "custom_rewrite_title",
 }
+
+# Persistent data paths
+BATCHES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "batches.json")
+SCHEDULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedules.json")
 
 # Video selection modes
 SELECTION_MODES = {

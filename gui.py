@@ -20,6 +20,9 @@ from config import (
     AUDIO_FORMATS,
 )
 from downloader import DownloadManager
+from batch_manager import BatchManager
+from scheduler import DownloadScheduler
+from gui_dialogs import TitleRulesDialog, ScheduleDialog, SaveBatchDialog
 
 
 # Theme setup
@@ -157,11 +160,14 @@ class App(ctk.CTk):
         self.minsize(880, 720)
 
         self.dm = DownloadManager()
+        self.batch_manager = BatchManager()
+        self.scheduler = DownloadScheduler(runner_callback=self._run_scheduled_job)
         self.fetched_videos = []
         self.fetched_playlist_title = ""
 
         self._build_ui()
         self._check_system_deps()
+        self.after(2000, self._start_scheduler_ticker)
 
     def _build_ui(self):
         # Main scrollable container
@@ -199,10 +205,14 @@ class App(ctk.CTk):
         self.tab_single = self.tabview.add("📹 Single Video")
         self.tab_playlist = self.tabview.add("📋 Playlist")
         self.tab_channel = self.tabview.add("📺 Channel")
+        self.tab_batches = self.tabview.add("📁 Batches")
+        self.tab_scheduler = self.tabview.add("⏰ Scheduler")
 
         self._build_single_tab()
         self._build_playlist_tab()
         self._build_channel_tab()
+        self._build_batches_tab()
+        self._build_scheduler_tab()
 
         # ========== Settings ==========
         settings_frame = ctk.CTkFrame(main_container)
@@ -232,13 +242,23 @@ class App(ctk.CTk):
             values=VIDEO_FORMATS + AUDIO_FORMATS, width=100
         ).grid(row=0, column=3, padx=5, pady=5)
 
-        # Row 1: Naming + Custom Prefix
+        # Row 1: Naming + Rules Button + Custom Prefix
         ctk.CTkLabel(sg, text="Naming:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.naming_var = ctk.StringVar(value="Video Title")
+        self.naming_var = ctk.StringVar(value="Numbered + Rewrite Title (01 - Cleaned)")
+        naming_box = ctk.CTkFrame(sg, fg_color="transparent")
+        naming_box.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
         ctk.CTkOptionMenu(
-            sg, variable=self.naming_var,
-            values=list(NAMING_SCHEMES.keys()), width=200
-        ).grid(row=1, column=1, padx=5, pady=5)
+            naming_box, variable=self.naming_var,
+            values=list(NAMING_SCHEMES.keys()), width=230
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            naming_box, text="⚙️ Rules", width=65, height=28,
+            fg_color="#495057", hover_color="#343a40",
+            font=("Segoe UI", 11, "bold"),
+            command=self._open_title_rules_dialog
+        ).pack(side="left", padx=(5, 0))
 
         ctk.CTkLabel(sg, text="Custom Prefix:").grid(row=1, column=2, sticky="w", padx=(20, 5), pady=5)
         self.prefix_entry = ctk.CTkEntry(sg, placeholder_text="e.g., MyVideo", width=150)
@@ -366,20 +386,36 @@ class App(ctk.CTk):
         action_frame.pack(fill="x", pady=(0, 10))
 
         self.download_btn = ctk.CTkButton(
-            action_frame, text="⬇️  Start Download", width=200, height=48,
-            font=("Segoe UI", 16, "bold"),
+            action_frame, text="⬇️  Start Download", width=180, height=48,
+            font=("Segoe UI", 15, "bold"),
             fg_color="#28a745", hover_color="#218838",
             command=self._start_download
         )
-        self.download_btn.pack(side="left", padx=10)
+        self.download_btn.pack(side="left", padx=(10, 5))
 
         self.cancel_btn = ctk.CTkButton(
-            action_frame, text="❌ Cancel", width=120, height=48,
+            action_frame, text="❌ Cancel", width=110, height=48,
             font=("Segoe UI", 14),
             fg_color="#dc3545", hover_color="#c82333",
             command=self._cancel_download, state="disabled"
         )
-        self.cancel_btn.pack(side="left", padx=10)
+        self.cancel_btn.pack(side="left", padx=5)
+
+        self.save_batch_btn = ctk.CTkButton(
+            action_frame, text="💾 Save as Batch", width=145, height=48,
+            font=("Segoe UI", 13, "bold"),
+            fg_color="#17a2b8", hover_color="#138496",
+            command=self._save_current_as_batch
+        )
+        self.save_batch_btn.pack(side="left", padx=5)
+
+        self.schedule_btn = ctk.CTkButton(
+            action_frame, text="⏰ Schedule", width=125, height=48,
+            font=("Segoe UI", 13, "bold"),
+            fg_color="#6f42c1", hover_color="#59359a",
+            command=self._schedule_current_download
+        )
+        self.schedule_btn.pack(side="left", padx=5)
 
         self.counter_label = ctk.CTkLabel(
             action_frame, text="", font=("Segoe UI", 12)
@@ -549,6 +585,458 @@ class App(ctk.CTk):
             text_color="#aaaaaa", wraplength=700, justify="left"
         )
         self.channel_info_label.pack(anchor="w", padx=10, pady=5)
+
+    def _open_title_rules_dialog(self):
+        """Open modal dialog to view and customize Title Rewrite Rules."""
+        TitleRulesDialog(self)
+
+    # ==================== Batches Tab ====================
+
+    def _build_batches_tab(self):
+        """Build Saved Batches tab."""
+        header_frame = ctk.CTkFrame(self.tab_batches, fg_color="transparent")
+        header_frame.pack(fill="x", padx=10, pady=(8, 4))
+
+        ctk.CTkLabel(
+            header_frame, text="📁 Saved Download Batches",
+            font=("Segoe UI", 14, "bold")
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            header_frame, text="➕ Save Current as Batch", width=170, height=30,
+            fg_color="#17a2b8", hover_color="#138496",
+            command=self._save_current_as_batch
+        ).pack(side="right", padx=4)
+
+        ctk.CTkButton(
+            header_frame, text="🔄 Refresh", width=80, height=30,
+            command=self._render_batches_list
+        ).pack(side="right", padx=4)
+
+        self.batches_scroll = ctk.CTkScrollableFrame(self.tab_batches, height=130)
+        self.batches_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self._render_batches_list()
+
+    def _render_batches_list(self):
+        """Render all saved batch cards in the batches tab."""
+        for widget in self.batches_scroll.winfo_children():
+            widget.destroy()
+
+        batches = self.batch_manager.get_all()
+        if not batches:
+            empty_frame = ctk.CTkFrame(self.batches_scroll, fg_color="transparent")
+            empty_frame.pack(fill="both", expand=True, pady=25)
+            ctk.CTkLabel(
+                empty_frame,
+                text="📁 No saved download batches yet.\nSet up a Single, Playlist, or Channel download and click '💾 Save as Batch'!",
+                font=("Segoe UI", 12), text_color="gray", justify="center"
+            ).pack()
+            return
+
+        for b in batches:
+            bid = b.get("id")
+            name = b.get("name", "Untitled Batch")
+            btype = b.get("type", "channel")
+            url = b.get("url", "")
+            quality = b.get("quality", "Best Quality")
+            fmt = b.get("format", "mp4")
+            naming = b.get("naming_scheme", "title")
+            sel_val = b.get("selection_value", "")
+            status = b.get("status", "Ready")
+
+            type_icons = {"single": "📹 Single", "playlist": "📋 Playlist", "channel": "📺 Channel"}
+            type_str = type_icons.get(btype, "🎬 Video")
+
+            card = ctk.CTkFrame(self.batches_scroll)
+            card.pack(fill="x", padx=5, pady=4)
+
+            left = ctk.CTkFrame(card, fg_color="transparent")
+            left.pack(side="left", fill="both", expand=True, padx=10, pady=8)
+
+            title_row = ctk.CTkFrame(left, fg_color="transparent")
+            title_row.pack(fill="x")
+            ctk.CTkLabel(
+                title_row, text=name, font=("Segoe UI", 13, "bold")
+            ).pack(side="left")
+            ctk.CTkLabel(
+                title_row, text=f" [{type_str}]", font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
+            ).pack(side="left", padx=5)
+
+            sub_text = f"🔗 {url[:50]}...  •  ⚙️ {quality} ({fmt})  •  🏷️ {naming}"
+            if sel_val:
+                sub_text += f"  •  Range: {sel_val}"
+            ctk.CTkLabel(
+                left, text=sub_text, font=("Segoe UI", 10), text_color="gray", anchor="w"
+            ).pack(fill="x", pady=(2, 0))
+
+            right = ctk.CTkFrame(card, fg_color="transparent")
+            right.pack(side="right", padx=10, pady=8)
+
+            status_colors = {"Ready": "#17a2b8", "Running": "#ffc107", "Completed": "#28a745", "Failed": "#dc3545"}
+            col = status_colors.get(status, "gray")
+            ctk.CTkLabel(
+                right, text=f"● {status}", font=("Segoe UI", 11, "bold"), text_color=col, width=80
+            ).pack(side="left", padx=5)
+
+            ctk.CTkButton(
+                right, text="▶️ Run Now", width=85, height=28,
+                fg_color="#28a745", hover_color="#218838",
+                command=lambda b_item=b: self._run_batch(b_item)
+            ).pack(side="left", padx=3)
+
+            ctk.CTkButton(
+                right, text="⏰ Schedule", width=85, height=28,
+                fg_color="#6f42c1", hover_color="#59359a",
+                command=lambda b_item=b: self._open_schedule_dialog(
+                    target_name=b_item.get("name"),
+                    target_type="batch",
+                    target_data=b_item
+                )
+            ).pack(side="left", padx=3)
+
+            ctk.CTkButton(
+                right, text="🗑️", width=35, height=28,
+                fg_color="#dc3545", hover_color="#c82333",
+                command=lambda bid_val=bid: self._delete_batch(bid_val)
+            ).pack(side="left", padx=3)
+
+    def _delete_batch(self, batch_id):
+        if messagebox.askyesno("Delete Batch", "Are you sure you want to delete this batch?"):
+            self.batch_manager.delete(batch_id)
+            self._render_batches_list()
+            self._update_status("Batch deleted.")
+
+    def _save_current_as_batch(self):
+        pkg = self._get_current_download_package()
+        if not pkg["url"]:
+            messagebox.showwarning("Warning", "Please enter a valid YouTube URL first!")
+            return
+        SaveBatchDialog(
+            parent=self,
+            batch_manager=self.batch_manager,
+            default_data=pkg,
+            on_saved=self._render_batches_list
+        )
+
+    # ==================== Scheduler Tab ====================
+
+    def _build_scheduler_tab(self):
+        """Build Scheduler tab."""
+        header_frame = ctk.CTkFrame(self.tab_scheduler, fg_color="transparent")
+        header_frame.pack(fill="x", padx=10, pady=(8, 4))
+
+        ctk.CTkLabel(
+            header_frame, text="⏰ Automated Download Scheduler",
+            font=("Segoe UI", 14, "bold")
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            header_frame, text="➕ Schedule Current", width=150, height=30,
+            fg_color="#6f42c1", hover_color="#59359a",
+            command=self._schedule_current_download
+        ).pack(side="right", padx=4)
+
+        ctk.CTkButton(
+            header_frame, text="🔄 Refresh", width=80, height=30,
+            command=self._render_schedules_list
+        ).pack(side="right", padx=4)
+
+        self.scheduler_ticker_label = ctk.CTkLabel(
+            self.tab_scheduler, text="⏳ No upcoming scheduled downloads.",
+            font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
+        )
+        self.scheduler_ticker_label.pack(anchor="w", padx=10, pady=(0, 4))
+
+        self.schedules_scroll = ctk.CTkScrollableFrame(self.tab_scheduler, height=120)
+        self.schedules_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self._render_schedules_list()
+
+    def _render_schedules_list(self):
+        """Render all scheduled jobs in the scheduler tab."""
+        for widget in self.schedules_scroll.winfo_children():
+            widget.destroy()
+
+        jobs = self.scheduler.get_all()
+        if not jobs:
+            empty_frame = ctk.CTkFrame(self.schedules_scroll, fg_color="transparent")
+            empty_frame.pack(fill="both", expand=True, pady=25)
+            ctk.CTkLabel(
+                empty_frame,
+                text="⏰ No scheduled downloads yet.\nSchedule any batch or current download to start automatically at your chosen time!",
+                font=("Segoe UI", 12), text_color="gray", justify="center"
+            ).pack()
+            return
+
+        for job in jobs:
+            jid = job.get("id")
+            name = job.get("name", "Scheduled Download")
+            run_at = job.get("run_at", "")
+            status = job.get("status", "Pending")
+            jtype = job.get("job_type", "direct")
+            tdata = job.get("target_data", {})
+            countdown = self.scheduler.get_countdown(run_at) if status == "Pending" else status
+
+            card = ctk.CTkFrame(self.schedules_scroll)
+            card.pack(fill="x", padx=5, pady=4)
+
+            left = ctk.CTkFrame(card, fg_color="transparent")
+            left.pack(side="left", fill="both", expand=True, padx=10, pady=8)
+
+            title_row = ctk.CTkFrame(left, fg_color="transparent")
+            title_row.pack(fill="x")
+            ctk.CTkLabel(title_row, text=name, font=("Segoe UI", 13, "bold")).pack(side="left")
+            ctk.CTkLabel(
+                title_row, text=f" [{jtype.upper()}]", font=("Segoe UI", 11), text_color="#3498DB"
+            ).pack(side="left", padx=5)
+
+            target_url = tdata.get("url", "")
+            sub = f"⏰ Run at: {run_at} (⏳ {countdown})"
+            if target_url:
+                sub += f"  •  🔗 {target_url[:40]}..."
+            ctk.CTkLabel(left, text=sub, font=("Segoe UI", 10), text_color="gray", anchor="w").pack(fill="x", pady=(2, 0))
+
+            right = ctk.CTkFrame(card, fg_color="transparent")
+            right.pack(side="right", padx=10, pady=8)
+
+            status_colors = {"Pending": "#f39c12", "Running": "#3498db", "Completed": "#2ecc71", "Cancelled": "#e74c3c", "Failed": "#e74c3c"}
+            col = status_colors.get(status, "gray")
+            ctk.CTkLabel(right, text=status, font=("Segoe UI", 11, "bold"), text_color=col, width=75).pack(side="left", padx=5)
+
+            if status == "Pending":
+                ctk.CTkButton(
+                    right, text="▶️ Run Now", width=80, height=28,
+                    fg_color="#28a745", hover_color="#218838",
+                    command=lambda j_item=job: self._run_scheduled_job(j_item)
+                ).pack(side="left", padx=3)
+
+                ctk.CTkButton(
+                    right, text="⏸️ Cancel", width=75, height=28,
+                    fg_color="#ffc107", hover_color="#e0a800", text_color="black",
+                    command=lambda jid_val=jid: self._cancel_schedule(jid_val)
+                ).pack(side="left", padx=3)
+
+            ctk.CTkButton(
+                right, text="🗑️", width=35, height=28,
+                fg_color="#dc3545", hover_color="#c82333",
+                command=lambda jid_val=jid: self._delete_schedule(jid_val)
+            ).pack(side="left", padx=3)
+
+    def _delete_schedule(self, job_id):
+        if messagebox.askyesno("Delete Schedule", "Delete this scheduled download task?"):
+            self.scheduler.delete(job_id)
+            self._render_schedules_list()
+            self._update_status("Schedule deleted.")
+
+    def _cancel_schedule(self, job_id):
+        self.scheduler.cancel(job_id)
+        self._render_schedules_list()
+        self._update_status("Schedule cancelled.")
+
+    def _schedule_current_download(self):
+        pkg = self._get_current_download_package()
+        if not pkg["url"]:
+            messagebox.showwarning("Warning", "Please enter a valid YouTube URL first!")
+            return
+        ScheduleDialog(
+            parent=self,
+            scheduler=self.scheduler,
+            target_name=pkg["name"],
+            target_type="direct",
+            target_data=pkg,
+            on_scheduled=self._render_schedules_list
+        )
+
+    def _open_schedule_dialog(self, target_name="", target_type="direct", target_data=None):
+        ScheduleDialog(
+            parent=self,
+            scheduler=self.scheduler,
+            target_name=target_name,
+            target_type=target_type,
+            target_data=target_data,
+            on_scheduled=self._render_schedules_list
+        )
+
+    def _start_scheduler_ticker(self):
+        """Update live countdown on scheduler tab periodically."""
+        try:
+            jobs = self.scheduler.get_all()
+            pending = [j for j in jobs if j.get("status") == "Pending"]
+            if pending:
+                next_job = pending[0]
+                run_at = next_job.get("run_at", "")
+                name = next_job.get("name", "Task")
+                cd = self.scheduler.get_countdown(run_at)
+                if hasattr(self, "scheduler_ticker_label"):
+                    self.scheduler_ticker_label.configure(
+                        text=f"⏳ Next: '{name}' starts in {cd} ({run_at})"
+                    )
+            else:
+                if hasattr(self, "scheduler_ticker_label"):
+                    self.scheduler_ticker_label.configure(text="⏳ No upcoming scheduled downloads.")
+        except Exception:
+            pass
+        self.after(2000, self._start_scheduler_ticker)
+
+    def _get_current_download_package(self):
+        """Extract all current configuration details from the active tab and settings."""
+        tab = self._get_current_tab()
+        settings = self._get_common_settings()
+        url = ""
+        name = "Download"
+        sel_mode = "all"
+        sel_val = ""
+
+        if tab == "single":
+            url = self.single_url_entry.get().strip()
+            name = "Single Video"
+        elif tab == "playlist":
+            url = self.playlist_url_entry.get().strip()
+            name = self.fetched_playlist_title or "Playlist Download"
+            sel_mode = SELECTION_MODES.get(self.playlist_sel_var.get(), "all")
+            sel_val = self.playlist_sel_value.get().strip()
+        elif tab == "channel":
+            url = self.channel_url_entry.get().strip()
+            name = self.fetched_playlist_title or "Channel Download"
+            sel_mode = SELECTION_MODES.get(self.channel_sel_var.get(), "all")
+            sel_val = self.channel_sel_value.get().strip()
+
+        return {
+            "name": name,
+            "type": tab,
+            "url": url,
+            "quality": settings.get("quality", "Best Quality"),
+            "format": settings.get("output_format", "mp4"),
+            "naming_scheme": settings.get("naming_scheme", "title"),
+            "custom_prefix": settings.get("custom_prefix", ""),
+            "selection_mode": sel_mode,
+            "selection_value": sel_val,
+            "download_dir": settings.get("download_dir", DEFAULT_DOWNLOAD_DIR),
+            "subfolder": settings.get("subfolder", ""),
+            "embed_thumbnail": settings.get("embed_thumbnail", False),
+            "download_subtitles": settings.get("download_subtitles", False),
+            "subtitle_lang": settings.get("subtitle_lang", "en"),
+            "speed_limit": settings.get("speed_limit", None),
+        }
+
+    def _run_batch(self, batch):
+        """Run a saved batch immediately."""
+        if self.dm.is_downloading:
+            messagebox.showwarning("Warning", "A download is already running! Please wait for it to complete.")
+            return
+
+        url = batch.get("url")
+        if not url:
+            messagebox.showerror("Error", "Batch has no URL!")
+            return
+
+        self.batch_manager.mark_status(batch["id"], "Running", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        self._render_batches_list()
+
+        def done_callback(success):
+            status = "Completed" if success else "Failed"
+            self.batch_manager.mark_status(batch["id"], status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            self.after(0, self._render_batches_list)
+
+        self._execute_package_download(batch, on_complete=done_callback)
+
+    def _run_scheduled_job(self, job):
+        """Called automatically by DownloadScheduler when scheduled time arrives."""
+        self.scheduler.set_busy(True)
+        self.after(0, lambda: self._update_status(f"⏰ Scheduler triggered: '{job.get('name')}'!"))
+
+        jtype = job.get("job_type", "direct")
+        tdata = job.get("target_data", {})
+
+        def done_callback(success):
+            st = "Completed" if success else "Failed"
+            self.scheduler.mark_status(job["id"], st, f"Finished at {datetime.now().strftime('%H:%M:%S')}")
+            self.scheduler.set_busy(False)
+            self.after(0, self._render_schedules_list)
+
+        if jtype == "batch":
+            bid = tdata.get("id")
+            saved_batch = self.batch_manager.get(bid) if bid else tdata
+            if saved_batch:
+                self.after(0, lambda: self._execute_package_download(saved_batch, on_complete=done_callback))
+            else:
+                done_callback(False)
+        else:
+            self.after(0, lambda: self._execute_package_download(tdata, on_complete=done_callback))
+
+    def _execute_package_download(self, pkg, on_complete=None):
+        """Execute a download package (single or batch) on a background thread."""
+        btype = pkg.get("type", "single")
+        url = pkg.get("url", "")
+        naming = pkg.get("naming_scheme", "title")
+        quality = pkg.get("quality", "Best Quality")
+        custom_prefix = pkg.get("custom_prefix", "")
+        download_dir = pkg.get("download_dir", DEFAULT_DOWNLOAD_DIR)
+        embed_thumb = pkg.get("embed_thumbnail", False)
+        subtitles = pkg.get("download_subtitles", False)
+        sub_lang = pkg.get("subtitle_lang", "en")
+        fmt = pkg.get("format", "mp4")
+        speed = pkg.get("speed_limit", None)
+        sel_mode = pkg.get("selection_mode", "all")
+        sel_val = pkg.get("selection_value", "")
+        subfolder = pkg.get("subfolder", "")
+
+        self.dm.reset()
+        self.progress_bar.set(0)
+        self.progress_percent.configure(text="0%")
+        self.download_btn.configure(state="disabled")
+        self.cancel_btn.configure(state="normal")
+
+        def worker():
+            success = False
+            try:
+                if btype == "single":
+                    success = self.dm.download_single(
+                        url=url,
+                        quality=quality,
+                        naming_scheme=naming,
+                        custom_prefix=custom_prefix,
+                        download_dir=download_dir,
+                        embed_thumbnail=embed_thumb,
+                        download_subtitles=subtitles,
+                        subtitle_lang=sub_lang,
+                        output_format=fmt,
+                        speed_limit=speed,
+                        progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
+                        status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
+                    )
+                else:
+                    self.after(0, lambda: self._update_status(f"🔍 Fetching {btype} info for batch download..."))
+                    videos, pl_title, _ = self.dm.fetch_playlist_or_channel(url, flat=True)
+                    actual_subfolder = subfolder or pl_title
+                    success = self.dm.download_batch(
+                        videos=videos,
+                        quality=quality,
+                        naming_scheme=naming,
+                        custom_prefix=custom_prefix,
+                        download_dir=download_dir,
+                        subfolder=actual_subfolder,
+                        embed_thumbnail=embed_thumb,
+                        download_subtitles=subtitles,
+                        subtitle_lang=sub_lang,
+                        output_format=fmt,
+                        speed_limit=speed,
+                        selection_mode=sel_mode,
+                        selection_value=sel_val,
+                        progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
+                        status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
+                        video_count_callback=lambda c: self.after(0, lambda: self._update_counter(c)),
+                    )
+            except Exception as e:
+                self.after(0, lambda: self._update_status(f"❌ Error: {e}"))
+                success = False
+            finally:
+                self.after(0, self._reset_buttons)
+                if on_complete:
+                    on_complete(success)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # ==================== Helpers ====================
 
