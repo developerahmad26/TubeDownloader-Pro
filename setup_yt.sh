@@ -71,6 +71,7 @@ Categories=AudioVideo;Network;
 EOF
 
 chmod +x "$DESKTOP_DIR/TubeDownloader_Pro.desktop"
+which gio >/dev/null 2>&1 && gio set "$DESKTOP_DIR/TubeDownloader_Pro.desktop" metadata::trusted true 2>/dev/null || true
 
 # Clean up old legacy shortcuts if present
 rm -f "$DESKTOP_DIR/YT_Downloader.desktop" 2>/dev/null || true

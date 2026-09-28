@@ -16,6 +16,13 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Auto-switch to dedicated virtual environment if running in system Python on Linux/VPS
+if sys.platform != "win32":
+    proj_dir = os.path.dirname(os.path.abspath(__file__))
+    venv_py = os.path.join(proj_dir, "venv", "bin", "python")
+    if os.path.isfile(venv_py) and os.path.realpath(sys.executable) != os.path.realpath(venv_py):
+        os.execv(venv_py, [venv_py] + sys.argv)
+
 
 def check_environment():
     """Verify system GUI requirements and dependencies before launch."""
@@ -39,36 +46,52 @@ def check_environment():
     # 2. Check Display on Linux / Unix systems
     if sys.platform != "win32":
         display = os.environ.get("DISPLAY")
-        if not display:
+        display_works = False
+        if display:
+            try:
+                t = tkinter.Tk(screenName=display)
+                t.destroy()
+                display_works = True
+            except Exception:
+                display_works = False
+
+        if not display_works:
             # Auto-detect active X11 sockets in /tmp/.X11-unix/
             x11_dir = "/tmp/.X11-unix"
             found_display = None
             if os.path.isdir(x11_dir):
                 try:
-                    for sock in sorted(os.listdir(x11_dir)):
+                    candidates = []
+                    # Prioritize higher display numbers (common for XRDP :10, :11) then lower
+                    for sock in sorted(os.listdir(x11_dir), reverse=True):
                         if sock.startswith("X") and sock[1:].isdigit():
-                            found_display = f":{sock[1:]}.0"
+                            candidates.append(f":{sock[1:]}.0")
+                            candidates.append(f":{sock[1:]}")
+                    for disp in candidates:
+                        try:
+                            t = tkinter.Tk(screenName=disp)
+                            t.destroy()
+                            found_display = disp
                             break
+                        except Exception:
+                            continue
                 except Exception:
                     pass
 
             if found_display:
                 os.environ["DISPLAY"] = found_display
-                print(f"[*] Auto-detected active X11 Display: {found_display}")
+                print(f"[*] Auto-detected active working X11 Display: {found_display}")
             else:
                 print("\n" + "=" * 68)
-                print("❌ [ERROR] NO GUI DISPLAY FOUND ($DISPLAY environment variable is empty)!")
+                print("❌ [ERROR] NO WORKING GUI DISPLAY FOUND ($DISPLAY is unreachable)!")
                 print("=" * 68)
                 print("TubeDownloader Pro is a graphical desktop application.")
-                print("It cannot open in a headless SSH terminal without an X11/RDP display.\n")
-                print("📌 How to run on your VPS:")
-                print(" 1. Connect to your VPS using Remote Desktop (RDP / XRDP / VNC).")
-                print(" 2. Open the Terminal INSIDE your Remote Desktop screen.")
-                print(" 3. Run: ./start_yt.sh")
-                print("\nIf you are using SSH with X11 forwarding, connect with: ssh -X user@vps_ip")
-                print("Or if an RDP session is already running, try running:")
-                print("   export DISPLAY=:10.0  (or DISPLAY=:0.0)")
-                print("   ./start_yt.sh")
+                print("It requires an active Remote Desktop (RDP / XRDP / VNC) screen.\n")
+                print("📌 Kaise solve karein:")
+                print(" 1. Apne VPS ko Remote Desktop (RDP / Windows Remote Desktop Connection) se connect karein.")
+                print(" 2. RDP screen ke andar Terminal khol kar run karein:")
+                print("       ./start.sh")
+                print(" 3. Ya Desktop par bane 'TubeDownloader Pro' icon par double-click karein.")
                 print("=" * 68 + "\n")
                 sys.exit(1)
 

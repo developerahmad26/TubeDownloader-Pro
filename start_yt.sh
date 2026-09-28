@@ -18,7 +18,10 @@ echo "=========================================================="
 
 # 1. Automatically sync with latest GitHub code (Conflict-free reset)
 echo "[*] Checking for latest updates from GitHub..."
+git config --global --add safe.directory "*" 2>/dev/null || true
+git config --global --add safe.directory "$DIR" 2>/dev/null || true
 git remote set-url origin https://github.com/developerahmad26/TubeDownloader-Pro.git 2>/dev/null || true
+git stash --quiet 2>/dev/null || true
 git fetch origin main --quiet 2>/dev/null && git reset --hard origin/main --quiet 2>/dev/null || true
 
 # 2. Check and ensure system Tkinter and venv packages are installed
