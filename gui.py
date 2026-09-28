@@ -502,44 +502,72 @@ class App(ctk.CTk):
         )
         self.counter_label.pack(side="right", padx=6)
 
-        # Status & Progress Bar Row
-        self.status_label = ctk.CTkLabel(
-            act_inner, text="⏳ Ready to download",
-            font=("Segoe UI", 12), text_color="#cccccc"
-        )
-        self.status_label.pack(anchor="w", pady=(2, 4))
+        # Dedicated Live Progress Dashboard
+        monitor_frame = ctk.CTkFrame(act_inner, fg_color="#12151e", corner_radius=8, border_width=1, border_color="#242b3d")
+        monitor_frame.pack(fill="x", pady=(6, 2))
 
-        bar_frame = ctk.CTkFrame(act_inner, fg_color="transparent")
+        mon_inner = ctk.CTkFrame(monitor_frame, fg_color="transparent")
+        mon_inner.pack(fill="x", padx=14, pady=10)
+
+        # Top row: Status info (Left) + Real-time Speed & ETA (Right)
+        mon_top = ctk.CTkFrame(mon_inner, fg_color="transparent")
+        mon_top.pack(fill="x", pady=(0, 6))
+
+        self.status_label = ctk.CTkLabel(
+            mon_top, text="⏳ Ready to download",
+            font=("Segoe UI", 12, "bold"), text_color="#f1f5f9"
+        )
+        self.status_label.pack(side="left")
+
+        self.speed_eta_label = ctk.CTkLabel(
+            mon_top, text="",
+            font=("Segoe UI", 11, "bold"), text_color="#38bdf8"
+        )
+        self.speed_eta_label.pack(side="right")
+
+        # Middle row: Progress bar + Live Percentage Label
+        bar_frame = ctk.CTkFrame(mon_inner, fg_color="transparent")
         bar_frame.pack(fill="x")
 
-        self.progress_bar = ctk.CTkProgressBar(bar_frame, height=22)
+        self.progress_bar = ctk.CTkProgressBar(
+            bar_frame, height=22, corner_radius=6,
+            progress_color="#0284c7", fg_color="#1e2433"
+        )
         self.progress_bar.pack(side="left", fill="x", expand=True)
         self.progress_bar.set(0)
 
         self.progress_percent = ctk.CTkLabel(
-            bar_frame, text="0%", font=("Segoe UI", 13, "bold"), width=60
+            bar_frame, text="0.0%", font=("Segoe UI", 13, "bold"),
+            text_color="#00f0ff", width=65
         )
         self.progress_percent.pack(side="right", padx=(10, 0))
 
         # ================= Card 4: Activity Console =================
-        log_card = ctk.CTkFrame(self.downloads_view, corner_radius=8)
-        log_card.pack(fill="x", pady=(0, 5))
+        log_card = ctk.CTkFrame(self.downloads_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
+        log_card.pack(fill="x", pady=(0, 8))
 
         log_head = ctk.CTkFrame(log_card, fg_color="transparent")
-        log_head.pack(fill="x", padx=15, pady=(8, 4))
+        log_head.pack(fill="x", padx=15, pady=(10, 6))
+
         ctk.CTkLabel(
-            log_head, text="📝 Download Console Activity",
-            font=("Segoe UI", 13, "bold")
+            log_head, text="📝 Download Console Activity Log",
+            font=("Segoe UI", 13, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
 
         ctk.CTkButton(
-            log_head, text="Clear Log", width=70, height=24,
-            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 10),
-            command=self._clear_download_log
+            log_head, text="📋 Copy Log", width=80, height=24,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 10, "bold"),
+            corner_radius=4, command=self._copy_download_log
+        ).pack(side="right", padx=(6, 0))
+
+        ctk.CTkButton(
+            log_head, text="🧹 Clear Log", width=80, height=24,
+            fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10),
+            corner_radius=4, command=self._clear_download_log
         ).pack(side="right")
 
-        self.log_text = ctk.CTkTextbox(log_card, height=125, font=("Consolas", 11))
-        self.log_text.pack(fill="x", padx=15, pady=(0, 10))
+        self.log_text = ctk.CTkTextbox(log_card, height=260, font=("Consolas", 11), fg_color="#0b0e14", corner_radius=6, border_width=1, border_color="#1e2330")
+        self.log_text.pack(fill="x", padx=15, pady=(0, 12))
         self.log_text.configure(state="disabled")
         self._attach_textbox_context_menu(self.log_text)
 
@@ -547,6 +575,16 @@ class App(ctk.CTk):
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", "end")
         self.log_text.configure(state="disabled")
+
+    def _copy_download_log(self):
+        try:
+            content = self.log_text.get("1.0", "end-1c")
+            if content.strip():
+                self.clipboard_clear()
+                self.clipboard_append(content)
+                self._update_status("📋 Console log copied to clipboard!", force_log=True)
+        except Exception:
+            pass
 
     # ==================== Tab builders ====================
 
@@ -2002,7 +2040,9 @@ class App(ctk.CTk):
 
         self.dm.reset()
         self.progress_bar.set(0)
-        self.progress_percent.configure(text="0%")
+        self.progress_percent.configure(text="0.0%")
+        if hasattr(self, "speed_eta_label"):
+            self.speed_eta_label.configure(text="")
         self.download_btn.configure(state="disabled")
         self.cancel_btn.configure(state="normal")
 
@@ -2582,16 +2622,39 @@ class App(ctk.CTk):
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
 
-    def _update_status(self, text):
+    def _update_status(self, text, force_log=False):
+        if not text:
+            return
+
+        # Check if text is a high-frequency download progress tick
+        is_progress_tick = (" | " in text and ("MB/s" in text or "KB/s" in text or "ETA:" in text))
+
         if hasattr(self, "status_label"):
-            self.status_label.configure(text=text)
-        self._log(text)
-        if getattr(self, "current_running_batch_id", None):
-            self._batch_log(text)
+            if is_progress_tick:
+                parts = text.split(" | ")
+                main_part = parts[0].strip()
+                meta_part = "  •  ".join(p.strip() for p in parts[1:])
+                self.status_label.configure(text=f"⚡ {main_part}")
+                if hasattr(self, "speed_eta_label"):
+                    self.speed_eta_label.configure(text=f"🚀 {meta_part}")
+            else:
+                self.status_label.configure(text=text)
+                if hasattr(self, "speed_eta_label"):
+                    self.speed_eta_label.configure(text="")
+
+        # Only write to log textboxes if it's a real milestone or forced log, NOT high-frequency speed ticks
+        if force_log or not is_progress_tick:
+            self._log(text)
+            if getattr(self, "current_running_batch_id", None):
+                self._batch_log(text)
 
     def _update_progress(self, percent):
-        self.progress_bar.set(percent / 100)
-        self.progress_percent.configure(text=f"{percent:.1f}%")
+        try:
+            val = max(0.0, min(100.0, float(percent)))
+            self.progress_bar.set(val / 100.0)
+            self.progress_percent.configure(text=f"{val:.1f}%")
+        except Exception:
+            pass
 
     def _update_counter(self, total):
         self.counter_label.configure(text=f"📊 Total: {total} videos")
@@ -2850,6 +2913,8 @@ class App(ctk.CTk):
     def _reset_buttons(self):
         self.download_btn.configure(state="normal")
         self.cancel_btn.configure(state="disabled")
+        if hasattr(self, "speed_eta_label"):
+            self.speed_eta_label.configure(text="")
 
 
 def main():
