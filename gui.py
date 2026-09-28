@@ -171,15 +171,25 @@ class App(ctk.CTk):
         title_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         title_frame.pack(fill="x", pady=(0, 10))
 
+        title_left = ctk.CTkFrame(title_frame, fg_color="transparent")
+        title_left.pack(side="left", fill="x", expand=True)
+
         ctk.CTkLabel(
-            title_frame, text="🎬 YT Video Downloader Pro",
+            title_left, text="🎬 YT Video Downloader Pro",
             font=("Segoe UI", 26, "bold"),
-        ).pack()
+        ).pack(anchor="w")
         ctk.CTkLabel(
-            title_frame,
+            title_left,
             text="Download Videos • Playlists • Channels — with Full Control",
             font=("Segoe UI", 12), text_color="gray",
-        ).pack()
+        ).pack(anchor="w")
+
+        ctk.CTkButton(
+            title_frame, text="🔄 Update & Restart", width=150, height=34,
+            fg_color="#1F6AA5", hover_color="#144870",
+            font=("Segoe UI", 12, "bold"),
+            command=self._update_and_restart
+        ).pack(side="right", padx=5)
 
         # ========== Tab View ==========
         self.tabview = ctk.CTkTabview(main_container, height=200)
@@ -530,6 +540,17 @@ class App(ctk.CTk):
             entry_widget.insert(0, text)
         except Exception:
             pass
+
+    def _update_and_restart(self):
+        """Pull latest code from GitHub and restart the application cleanly."""
+        self._update_status("🔄 Checking for updates from GitHub...")
+        try:
+            subprocess.run(["git", "fetch", "origin", "main"], timeout=10)
+            subprocess.run(["git", "reset", "--hard", "origin/main"], timeout=10)
+        except Exception:
+            pass
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
 
     def _browse_dir(self):
         directory = filedialog.askdirectory()
