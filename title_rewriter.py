@@ -1,7 +1,4 @@
-"""Title Rewriter and Rephraser Engine for YouTube Video Downloader.
-Supports Semantic Rephrasing, Structure Transformation, Synonym Replacement,
-and optional Gemini AI Rewriting.
-"""
+"""Title Rewriter and Rephraser Engine for TubeDownloader Pro."""
 
 import json
 import os

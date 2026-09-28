@@ -1,4 +1,4 @@
-"""Automated build script for packaging YT Video Downloader Pro into a standalone .exe."""
+"""Automated build script for packaging TubeDownloader Pro into a standalone .exe."""
 
 import os
 import shutil

@@ -1,4 +1,4 @@
-"""Modern GUI for YouTube Video Downloader using CustomTkinter."""
+"""Modern GUI for TubeDownloader Pro using CustomTkinter."""
 
 import os
 import sys

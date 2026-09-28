@@ -1,4 +1,4 @@
-"""Configuration constants for YouTube Video Downloader."""
+"""Configuration constants for TubeDownloader Pro."""
 
 import os
 

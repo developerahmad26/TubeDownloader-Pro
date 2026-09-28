@@ -1,6 +1,6 @@
-# 🎬 YT Video Downloader Pro v1.0
+# 🎬 TubeDownloader Pro v1.0
 
-A professional, feature-rich YouTube Video Downloader with a modern dark-themed GUI.
+A professional, feature-rich YouTube Video & Audio Downloader with a modern dark-themed GUI and automated batch engine.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue)
 ![yt-dlp](https://img.shields.io/badge/yt--dlp-powered-red)
@@ -95,13 +95,19 @@ python main.py
 ## 📁 Project Structure
 
 ```
-Youtube Video Downloader/
+TubeDownloader Pro/
+├── TubeDownloader Pro.exe # Standalone Windows Executable (No Python needed)
 ├── main.py              # Entry point with dependency checking
 ├── gui.py               # CustomTkinter GUI application
 ├── downloader.py        # Core download engine (yt-dlp)
 ├── config.py            # Configuration constants
+├── batch_manager.py     # Batch downloader manager
+├── scheduler.py         # Automated scheduler engine
+├── title_rewriter.py    # Smart title rewriter
 ├── requirements.txt     # Python dependencies
-└── README.md            # This file
+├── setup.sh             # VPS / RDP setup script
+├── start.sh             # VPS / RDP launch script
+└── README.md            # Documentation
 ```
 
 ---

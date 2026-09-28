@@ -1,4 +1,4 @@
-"""Generate a premium modern app icon for YouTube Video Downloader Pro."""
+"""Generate a premium modern app icon for TubeDownloader Pro."""
 
 import os
 import math

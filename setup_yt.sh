@@ -41,8 +41,11 @@ echo "[*] Installing requirements into isolated virtual environment..."
 "$PIP_BIN" install --upgrade pip --quiet || true
 "$PIP_BIN" install -r "$DIR/requirements.txt" || true
 
-# 4. Make start script executable
-chmod +x "$DIR/start_yt.sh"
+# Ensure git remote is updated to TubeDownloader-Pro
+git remote set-url origin https://github.com/developerahmad26/TubeDownloader-Pro.git 2>/dev/null || true
+
+# 4. Make all scripts executable
+chmod +x "$DIR"/*.sh 2>/dev/null || true
 
 # 5. Create Desktop Shortcut on RDP Desktop
 DESKTOP_DIR="$HOME/Desktop"
@@ -60,7 +63,7 @@ Version=1.0
 Type=Application
 Name=TubeDownloader Pro
 Comment=Download YouTube Channel / Playlist / Single Videos
-Exec=bash -c "cd '$DIR' && ./start_yt.sh"
+Exec=bash -c "cd '$DIR' && ./start.sh"
 Icon=$ICON_PATH
 Terminal=true
 StartupNotify=true
@@ -69,11 +72,8 @@ EOF
 
 chmod +x "$DESKTOP_DIR/TubeDownloader_Pro.desktop"
 
-# Also support legacy shortcut name if it existed
-if [ -f "$DESKTOP_DIR/YT_Downloader.desktop" ]; then
-    cp "$DESKTOP_DIR/TubeDownloader_Pro.desktop" "$DESKTOP_DIR/YT_Downloader.desktop"
-    chmod +x "$DESKTOP_DIR/YT_Downloader.desktop"
-fi
+# Clean up old legacy shortcuts if present
+rm -f "$DESKTOP_DIR/YT_Downloader.desktop" 2>/dev/null || true
 
 echo "=========================================================="
 echo " [OK] TubeDownloader Pro is ready on your RDP Desktop!"
