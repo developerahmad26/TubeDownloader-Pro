@@ -550,22 +550,26 @@ class App(ctk.CTk):
             pass
 
     def _get_cookie_file_path(self):
+        found = DownloadManager.find_cookie_file()
+        if found:
+            return found
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 
     def _has_cookies(self):
-        cookie_path = self._get_cookie_file_path()
-        return os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 10
+        return DownloadManager.find_cookie_file() is not None
 
     def _get_cookie_status_text(self):
-        if self._has_cookies():
-            return "✅ YouTube Cookies Loaded (Bot Bypass Active)"
-        return "⚠️ No Cookies (Recommended for VPS / 403 Bot Errors)"
+        cookie_path = DownloadManager.find_cookie_file()
+        if cookie_path:
+            return f"✅ Cookies Active: {os.path.basename(cookie_path)}"
+        return "⚠️ No Cookies Found (Click to Add)"
 
     def _update_cookie_status_label(self):
         if hasattr(self, 'cookie_status_label'):
-            if self._has_cookies():
+            cookie_path = DownloadManager.find_cookie_file()
+            if cookie_path:
                 self.cookie_status_label.configure(
-                    text="✅ YouTube Cookies Active (Bot Bypass ON)",
+                    text=f"✅ Cookies Active: {os.path.basename(cookie_path)}",
                     text_color="#2ECC71"
                 )
             else:

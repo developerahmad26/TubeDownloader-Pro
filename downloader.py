@@ -102,6 +102,24 @@ class DownloadManager:
         self.skipped_videos = []
         self.download_log = []
 
+    @staticmethod
+    def find_cookie_file():
+        """Search all possible locations where cookies.txt might be located."""
+        candidates = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt"),
+            os.path.abspath("cookies.txt"),
+            os.path.expanduser("~/cookies.txt"),
+            "/root/cookies.txt",
+            os.path.expanduser("~/rumble-uploader/cookies.txt"),
+            "/root/rumble-uploader/cookies.txt",
+            os.path.join(os.path.expanduser("~"), "Desktop", "cookies.txt"),
+            os.path.join(os.path.expanduser("~"), "Downloads", "cookies.txt"),
+        ]
+        for p in candidates:
+            if os.path.exists(p) and os.path.isfile(p) and os.path.getsize(p) > 10:
+                return p
+        return None
+
     def cancel(self):
         """Cancel the current download."""
         self.cancel_flag = True
@@ -164,13 +182,7 @@ class DownloadManager:
         if shutil.which('node'):
             ydl_opts['js_runtimes'] = {'node': {}}
 
-        app_cookie = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-        cookie_path = None
-        if os.path.exists(app_cookie) and os.path.getsize(app_cookie) > 10:
-            cookie_path = app_cookie
-        elif os.path.exists("cookies.txt") and os.path.getsize("cookies.txt") > 10:
-            cookie_path = "cookies.txt"
-
+        cookie_path = self.find_cookie_file()
         if cookie_path:
             ydl_opts['cookiefile'] = cookie_path
             ydl_opts['extractor_args']['youtube']['player_client'] = ['web', 'android']
@@ -355,13 +367,7 @@ class DownloadManager:
             opts['js_runtimes'] = {'node': {}}
 
         # Auto-detect cookies.txt if present
-        app_cookie = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-        cookie_path = None
-        if os.path.exists(app_cookie) and os.path.getsize(app_cookie) > 10:
-            cookie_path = app_cookie
-        elif os.path.exists("cookies.txt") and os.path.getsize("cookies.txt") > 10:
-            cookie_path = "cookies.txt"
-
+        cookie_path = self.find_cookie_file()
         if cookie_path:
             opts['cookiefile'] = cookie_path
             opts['extractor_args']['youtube']['player_client'] = ['web', 'android']
