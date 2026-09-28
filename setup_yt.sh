@@ -14,10 +14,10 @@ echo "=========================================================="
 echo " [*] Setting up YouTube Video Downloader on VPS / RDP..."
 echo "=========================================================="
 
-# 1. Ensure required system packages (Tkinter for GUI, FFmpeg, venv, Node.js, xclip for clipboard)
+# 1. Ensure required system packages (Tkinter for GUI, FFmpeg, venv, Node.js, xclip for clipboard, unzip)
 echo "[*] Checking system dependencies..."
 apt update -y
-apt install -y python3-tk python3-venv ffmpeg nodejs xclip
+apt install -y python3-tk python3-venv ffmpeg nodejs xclip unzip
 
 # 2. Create isolated Python virtual environment (No conflict with other apps)
 if [ ! -d "$DIR/venv" ]; then

@@ -802,33 +802,27 @@ class App(ctk.CTk):
     def _check_system_deps(self):
         """Ensure JavaScript runtime (Node.js/Deno) and clipboard tools (xclip) are available."""
         def worker():
-            has_node = (shutil.which('node') is not None) or (shutil.which('nodejs') is not None) or os.path.exists('/usr/bin/nodejs')
-            has_deno = shutil.which('deno') is not None or os.path.exists(os.path.expanduser('~/.deno/bin/deno'))
-            if has_node or has_deno:
-                rt = 'Node.js' if has_node else 'Deno'
-                self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt} active (YouTube challenge solver enabled)"))
+            from downloader import get_js_runtime_config
+            js_cfg = get_js_runtime_config()
+            if js_cfg:
+                rt_name = list(js_cfg.keys())[0]
+                rt_label = 'Deno' if rt_name == 'deno' else 'Node.js'
+                self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt_label} active (YouTube challenge solver enabled)"))
             else:
-                self.after(0, lambda: self._log("⚠️ Node.js missing! YouTube requires Node.js to decrypt video streams."))
+                self.after(0, lambda: self._log("⚠️ JS Engine missing! YouTube challenge solver may be restricted."))
 
             if sys.platform.startswith('linux'):
-                if os.path.exists('/usr/bin/nodejs') and not os.path.exists('/usr/bin/node'):
-                    try:
-                        os.symlink('/usr/bin/nodejs', '/usr/bin/node')
-                    except Exception:
-                        pass
                 missing = []
-                if not has_node and not has_deno:
-                    missing.append('nodejs')
                 if not shutil.which('xclip'):
                     missing.append('xclip')
+                if not shutil.which('unzip'):
+                    missing.append('unzip')
                 if missing:
-                    self.after(0, lambda: self._log(f"⏳ Auto-installing missing packages: {' '.join(missing)}..."))
                     try:
                         subprocess.run(['apt', 'update', '-y'], timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         subprocess.run(['apt', 'install', '-y'] + missing, timeout=90, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        self.after(0, lambda: self._log(f"✅ Successfully installed: {' '.join(missing)}!"))
-                    except Exception as e:
-                        self.after(0, lambda: self._log(f"⚠️ Auto-install notice: {e}"))
+                    except Exception:
+                        pass
         threading.Thread(target=worker, daemon=True).start()
 
     def _browse_dir(self):

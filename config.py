@@ -11,11 +11,11 @@ DEFAULT_DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "YT Do
 
 # Quality options - flexible formats that merge to mp4/mkv via ffmpeg
 QUALITY_OPTIONS = {
-    "Best Quality": "bestvideo+bestaudio/best",
-    "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-    "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-    "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
-    "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]/best",
+    "Best Quality": "bestvideo*+bestaudio/best",
+    "1080p": "bestvideo*[height<=1080]+bestaudio/best[height<=1080]/best",
+    "720p": "bestvideo*[height<=720]+bestaudio/best[height<=720]/best",
+    "480p": "bestvideo*[height<=480]+bestaudio/best[height<=480]/best",
+    "360p": "bestvideo*[height<=360]+bestaudio/best[height<=360]/best",
     "Audio Only (MP3)": "bestaudio/best",
     "Audio Only (M4A)": "bestaudio[ext=m4a]/bestaudio/best",
 }

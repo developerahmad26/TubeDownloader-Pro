@@ -40,50 +40,75 @@ def get_ffmpeg_dir():
 
 
 def get_js_runtime_config():
-    """Find or auto-install Node.js or Deno JS runtime for yt-dlp challenge solving."""
-    import sys
-    # 1. Check system PATH
-    for name in ['deno', 'node', 'nodejs']:
-        p = shutil.which(name)
-        if p:
-            rt_type = 'deno' if name == 'deno' else 'node'
-            return {rt_type: {'path': p}}
+    """Find or auto-install Node.js (>=22) or Deno (>=2.3) JS runtime for yt-dlp challenge solving."""
+    import sys, subprocess, re
 
-    # 2. Check standard Linux / VPS paths
+    def is_valid_node(path):
+        try:
+            out = subprocess.check_output([path, '--version'], stderr=subprocess.STDOUT, timeout=5).decode()
+            m = re.search(r'v(\d+)\.', out)
+            return m is not None and int(m.group(1)) >= 22
+        except Exception:
+            return False
+
+    def is_valid_deno(path):
+        try:
+            out = subprocess.check_output([path, '--version'], stderr=subprocess.STDOUT, timeout=5).decode()
+            m = re.search(r'deno (\d+)\.(\d+)', out)
+            if m:
+                major, minor = int(m.group(1)), int(m.group(2))
+                return (major > 2) or (major == 2 and minor >= 3)
+            return True
+        except Exception:
+            return False
+
     home = os.path.expanduser("~")
     app_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        ('deno', os.path.join(app_dir, 'deno')),
-        ('deno', os.path.join(home, '.deno', 'bin', 'deno')),
-        ('deno', '/root/.deno/bin/deno'),
-        ('deno', '/usr/bin/deno'),
-        ('deno', '/usr/local/bin/deno'),
-        ('node', '/usr/bin/node'),
-        ('node', '/usr/bin/nodejs'),
-        ('node', '/usr/local/bin/node'),
-        ('node', '/usr/local/bin/nodejs'),
-        ('node', '/bin/node'),
-        ('node', '/bin/nodejs'),
-        ('node', '/snap/bin/node'),
-    ]
-    for rt_type, path in candidates:
-        if path and os.path.isfile(path) and os.access(path, os.X_OK):
-            return {rt_type: {'path': path}}
 
-    # 3. If on Linux and missing, auto-download standalone Deno binary (fast, no root needed)
+    # 1. Check Deno in app dir, PATH, or home
+    deno_candidates = [
+        os.path.join(app_dir, 'deno'),
+        os.path.join(app_dir, 'deno.exe'),
+        os.path.join(home, '.deno', 'bin', 'deno'),
+        os.path.join(home, '.deno', 'bin', 'deno.exe'),
+        shutil.which('deno'),
+        '/usr/local/bin/deno',
+        '/usr/bin/deno',
+        '/root/.deno/bin/deno',
+    ]
+    for d in deno_candidates:
+        if d and os.path.isfile(d) and is_valid_deno(d):
+            return {'deno': {'path': d}}
+
+    # 2. Check Node in PATH or system paths (must be version >= 22)
+    node_candidates = [
+        shutil.which('node'),
+        shutil.which('nodejs'),
+        '/usr/bin/node',
+        '/usr/local/bin/node',
+        '/bin/node',
+    ]
+    for n in node_candidates:
+        if n and os.path.isfile(n) and is_valid_node(n):
+            return {'node': {'path': n}}
+
+    # 3. If on Linux and no valid JS runtime found, auto-download standalone Deno 2.4.2 binary
     if sys.platform.startswith('linux'):
-        try:
-            import urllib.request, zipfile, io
-            url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"
-            local_deno = os.path.join(app_dir, 'deno')
-            req = urllib.request.urlopen(url, timeout=25)
-            with zipfile.ZipFile(io.BytesIO(req.read())) as zf:
-                zf.extract("deno", path=app_dir)
-            os.chmod(local_deno, 0o755)
-            if os.path.isfile(local_deno):
-                return {'deno': {'path': local_deno}}
-        except Exception:
-            pass
+        local_deno = os.path.join(app_dir, 'deno')
+        if not os.path.isfile(local_deno) or not is_valid_deno(local_deno):
+            try:
+                import urllib.request, zipfile, io
+                url = "https://github.com/denoland/deno/releases/download/v2.4.2/deno-x86_64-unknown-linux-gnu.zip"
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                resp = urllib.request.urlopen(req, timeout=30)
+                with zipfile.ZipFile(io.BytesIO(resp.read())) as zf:
+                    zf.extract("deno", path=app_dir)
+                os.chmod(local_deno, 0o755)
+            except Exception:
+                pass
+
+        if os.path.isfile(local_deno) and os.access(local_deno, os.X_OK):
+            return {'deno': {'path': local_deno}}
 
     return None
 
@@ -426,16 +451,17 @@ class DownloadManager:
             'fragment_retries': 5,
             'continuedl': True,
             'overwrites': False,
-            'windowsfilenames': True,
             'remote_components': ['ejs:github'],
-            'format_sort': ['hasvid'],
-            'format_sort_force': True,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['default', '-tv', '-tv_embedded'],
                 }
             },
         }
+
+        if not is_audio_only:
+            opts['format_sort'] = ['hasvid']
+            opts['format_sort_force'] = True
 
         if logger:
             opts['logger'] = logger
@@ -573,13 +599,13 @@ class DownloadManager:
             # Multi-tiered fallback if primary download failed
             if result != 0:
                 is_audio = "Audio Only" in quality
-                tier1_fmt = 'bestaudio/best' if is_audio else 'bestvideo+bestaudio/best'
-                tier2_fmt = 'bestaudio/best' if is_audio else 'best[height<=720]/18/22/best'
+                tier1_fmt = 'bestaudio/best' if is_audio else 'bestvideo*+bestaudio/best'
+                tier2_fmt = '140/bestaudio/best' if is_audio else '18/best'
 
                 if status_callback:
                     status_callback("🔄 Retrying with mobile stream engine...")
                 tier1_opts = dict(opts)
-                tier1_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'mweb']}}
+                tier1_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'web']}}
                 tier1_opts['format'] = tier1_fmt
                 try:
                     with yt_dlp.YoutubeDL(tier1_opts) as ydl:
@@ -593,7 +619,7 @@ class DownloadManager:
                 if status_callback:
                     status_callback("🔄 Retrying with direct progressive stream...")
                 tier2_opts = dict(opts)
-                tier2_opts['extractor_args'] = {'youtube': {'player_client': ['mweb', 'android']}}
+                tier2_opts['extractor_args'] = {'youtube': {'player_client': ['android']}}
                 tier2_opts['format'] = tier2_fmt
                 try:
                     with yt_dlp.YoutubeDL(tier2_opts) as ydl:
@@ -765,13 +791,13 @@ class DownloadManager:
                     # Multi-tiered fallback if primary batch item download failed
                     if result != 0:
                         is_audio = "Audio Only" in quality
-                        tier1_fmt = 'bestaudio/best' if is_audio else 'bestvideo+bestaudio/best'
-                        tier2_fmt = 'bestaudio/best' if is_audio else 'best[height<=720]/18/22/best'
+                        tier1_fmt = 'bestaudio/best' if is_audio else 'bestvideo*+bestaudio/best'
+                        tier2_fmt = '140/bestaudio/best' if is_audio else '18/best'
 
                         if status_callback:
                             status_callback(f"[{idx}/{self.total_videos}] 🔄 Retrying with mobile stream engine...")
                         tier1_opts = dict(opts)
-                        tier1_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'mweb']}}
+                        tier1_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'web']}}
                         tier1_opts['format'] = tier1_fmt
                         try:
                             with yt_dlp.YoutubeDL(tier1_opts) as ydl:
@@ -785,7 +811,7 @@ class DownloadManager:
                         if status_callback:
                             status_callback(f"[{idx}/{self.total_videos}] 🔄 Retrying with direct progressive stream...")
                         tier2_opts = dict(opts)
-                        tier2_opts['extractor_args'] = {'youtube': {'player_client': ['mweb', 'android']}}
+                        tier2_opts['extractor_args'] = {'youtube': {'player_client': ['android']}}
                         tier2_opts['format'] = tier2_fmt
                         try:
                             with yt_dlp.YoutubeDL(tier2_opts) as ydl:
