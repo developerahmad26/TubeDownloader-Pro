@@ -1,6 +1,7 @@
 """Core download engine using yt-dlp."""
 
 import os
+import sys
 import re
 import shutil
 import threading

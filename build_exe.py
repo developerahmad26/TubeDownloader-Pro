@@ -23,7 +23,7 @@ def build():
         "--clean",
         "--onefile",
         "--windowed",
-        "--name=YT Video Downloader Pro",
+        "--name=TubeDownloader Pro",
         "--icon=assets/icon.ico",
         "--add-data=assets;assets",
         "--collect-all=customtkinter",
@@ -46,12 +46,18 @@ def build():
     
     result = subprocess.run(cmd)
     if result.returncode == 0:
-        exe_path = os.path.abspath(os.path.join("dist", "YT Video Downloader Pro.exe"))
+        exe_path = os.path.abspath(os.path.join("dist", "TubeDownloader Pro.exe"))
+        # Also copy to root directory for easy access
+        root_exe = os.path.abspath("TubeDownloader Pro.exe")
+        try:
+            shutil.copy2(exe_path, root_exe)
+        except Exception:
+            pass
         print("\n" + "="*60)
         print("[SUCCESS] Standalone EXE created successfully!")
-        print(f"Location: {exe_path}")
-        if os.path.exists(exe_path):
-            size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+        print(f"Location: {root_exe}")
+        if os.path.exists(root_exe):
+            size_mb = os.path.getsize(root_exe) / (1024 * 1024)
             print(f"Size: {size_mb:.2f} MB")
         print("="*60 + "\n")
     else:

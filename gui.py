@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
+from PIL import Image
 
 from config import (
     APP_NAME,
@@ -229,13 +230,26 @@ class App(ctk.CTk):
         brand_frame = ctk.CTkFrame(top_bar, fg_color="transparent")
         brand_frame.pack(side="left", padx=16, pady=8)
 
+        # Embedded Premium App Logo
+        try:
+            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                logo_path = os.path.join(sys._MEIPASS, "assets", "icon.png")
+            else:
+                logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
+            if os.path.exists(logo_path):
+                pil_logo = Image.open(logo_path)
+                self._brand_logo_img = ctk.CTkImage(light_image=pil_logo, dark_image=pil_logo, size=(30, 30))
+                ctk.CTkLabel(brand_frame, text="", image=self._brand_logo_img).pack(side="left", padx=(0, 10))
+        except Exception:
+            pass
+
         ctk.CTkLabel(
-            brand_frame, text="🎬 YT Downloader Studio",
+            brand_frame, text=APP_NAME,
             font=("Segoe UI", 18, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
         ctk.CTkLabel(
             brand_frame, text=f"v{APP_VERSION} PRO",
-            font=("Segoe UI", 10, "bold"), text_color="#38bdf8", fg_color="#0c2538", corner_radius=4, padx=6, pady=2
+            font=("Segoe UI", 10, "bold"), text_color="#f43f5e", fg_color="#2c0d16", corner_radius=4, padx=6, pady=2
         ).pack(side="left", padx=(8, 0), pady=(2, 0))
 
         # Center: 4 Clean Segregated Studio Nav Buttons

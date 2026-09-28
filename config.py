@@ -3,7 +3,7 @@
 import os
 
 # App info
-APP_NAME = "YT Video Downloader Pro"
+APP_NAME = "TubeDownloader Pro"
 APP_VERSION = "1.0.0"
 
 import sys

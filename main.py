@@ -1,4 +1,4 @@
-"""YouTube Video Downloader Pro — Entry Point.
+"""TubeDownloader Pro — Entry Point.
 
 A professional YouTube video downloader with support for:
 - Single video downloads
@@ -52,7 +52,7 @@ def main():
 
     from gui import App
 
-    print("[*] Starting YT Video Downloader Pro...")
+    print("[*] Starting TubeDownloader Pro...")
     app = App()
     app.mainloop()
 
