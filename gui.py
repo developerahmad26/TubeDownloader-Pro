@@ -161,7 +161,7 @@ class App(ctk.CTk):
         self.fetched_playlist_title = ""
 
         self._build_ui()
-        self._check_js_runtime()
+        self._check_system_deps()
 
     def _build_ui(self):
         # Main scrollable container
@@ -243,6 +243,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(sg, text="Custom Prefix:").grid(row=1, column=2, sticky="w", padx=(20, 5), pady=5)
         self.prefix_entry = ctk.CTkEntry(sg, placeholder_text="e.g., MyVideo", width=150)
         self.prefix_entry.grid(row=1, column=3, padx=5, pady=5)
+        self._attach_entry_context_menu(self.prefix_entry)
 
         # Row 2: Speed limit + Subtitle language
         ctk.CTkLabel(sg, text="Speed Limit:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
@@ -250,12 +251,14 @@ class App(ctk.CTk):
         speed_frame.grid(row=2, column=1, padx=5, pady=5, sticky="w")
         self.speed_entry = ctk.CTkEntry(speed_frame, placeholder_text="0", width=100)
         self.speed_entry.pack(side="left")
+        self._attach_entry_context_menu(self.speed_entry)
         ctk.CTkLabel(speed_frame, text="KB/s (0=unlimited)", text_color="gray").pack(side="left", padx=5)
 
         ctk.CTkLabel(sg, text="Sub Language:").grid(row=2, column=2, sticky="w", padx=(20, 5), pady=5)
         self.subtitle_lang_entry = ctk.CTkEntry(sg, placeholder_text="en", width=150)
         self.subtitle_lang_entry.insert(0, "en")
         self.subtitle_lang_entry.grid(row=2, column=3, padx=5, pady=5)
+        self._attach_entry_context_menu(self.subtitle_lang_entry)
 
         # Checkboxes row
         cb_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
@@ -311,8 +314,18 @@ class App(ctk.CTk):
         ).pack(side="left", padx=(0, 10))
 
         self.dir_var = ctk.StringVar(value=DEFAULT_DOWNLOAD_DIR)
-        ctk.CTkEntry(
+        self.dir_entry = ctk.CTkEntry(
             dir_inner, textvariable=self.dir_var, width=420
+        )
+        self.dir_entry.pack(side="left", padx=5)
+        self._attach_entry_context_menu(self.dir_entry)
+
+        ctk.CTkButton(
+            dir_inner, text="Browse", width=80, command=self._browse_dir
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            dir_inner, text="📂 Open", width=80, command=self._open_download_dir
         ).pack(side="left", padx=5)
 
         ctk.CTkButton(
@@ -385,6 +398,7 @@ class App(ctk.CTk):
         self.log_text = ctk.CTkTextbox(log_frame, height=120, font=("Consolas", 11))
         self.log_text.pack(fill="x", padx=15, pady=(0, 10))
         self.log_text.configure(state="disabled")
+        self._attach_textbox_context_menu(self.log_text)
 
     # ==================== Tab builders ====================
 
@@ -401,6 +415,7 @@ class App(ctk.CTk):
             height=38, font=("Segoe UI", 13)
         )
         self.single_url_entry.pack(fill="x", padx=10, pady=5)
+        self._attach_entry_context_menu(self.single_url_entry)
 
         btn_frame = ctk.CTkFrame(self.tab_single, fg_color="transparent")
         btn_frame.pack(anchor="w", padx=10, pady=5)
@@ -437,9 +452,10 @@ class App(ctk.CTk):
             height=38, font=("Segoe UI", 13)
         )
         self.playlist_url_entry.pack(side="left", fill="x", expand=True)
+        self._attach_entry_context_menu(self.playlist_url_entry)
 
         ctk.CTkButton(
-            url_frame, text="📋", width=40,
+            url_frame, text="📋 Paste", width=80,
             command=lambda: self._paste_clipboard(self.playlist_url_entry)
         ).pack(side="left", padx=5)
 
@@ -464,6 +480,7 @@ class App(ctk.CTk):
             sel_frame, placeholder_text="e.g., 1-10 or 1,3,5", width=130
         )
         self.playlist_sel_value.pack(side="left", padx=5)
+        self._attach_entry_context_menu(self.playlist_sel_value)
 
         ctk.CTkButton(
             sel_frame, text="👁️ Preview & Select", width=150,
@@ -492,9 +509,10 @@ class App(ctk.CTk):
             height=38, font=("Segoe UI", 13)
         )
         self.channel_url_entry.pack(side="left", fill="x", expand=True)
+        self._attach_entry_context_menu(self.channel_url_entry)
 
         ctk.CTkButton(
-            url_frame, text="📋", width=40,
+            url_frame, text="📋 Paste", width=80,
             command=lambda: self._paste_clipboard(self.channel_url_entry)
         ).pack(side="left", padx=5)
 
@@ -519,6 +537,7 @@ class App(ctk.CTk):
             sel_frame, placeholder_text="e.g., 1-10 or 5", width=130
         )
         self.channel_sel_value.pack(side="left", padx=5)
+        self._attach_entry_context_menu(self.channel_sel_value)
 
         ctk.CTkButton(
             sel_frame, text="👁️ Preview & Select", width=150,
@@ -533,14 +552,230 @@ class App(ctk.CTk):
 
     # ==================== Helpers ====================
 
-    def _paste_clipboard(self, entry_widget):
-        """Paste clipboard content into an entry widget."""
+    def _get_clipboard_text(self):
+        """Robustly retrieve clipboard text across Windows, macOS, and Linux/XRDP."""
+        # 1. Standard Tkinter clipboard (UTF8)
         try:
-            text = self.clipboard_get()
-            entry_widget.delete(0, "end")
-            entry_widget.insert(0, text)
+            val = self.clipboard_get(type='UTF8_STRING')
+            if val and val.strip():
+                return val.strip()
         except Exception:
             pass
+
+        # 2. Standard Tkinter clipboard (Default)
+        try:
+            val = self.clipboard_get()
+            if val and val.strip():
+                return val.strip()
+        except Exception:
+            pass
+
+        # 3. Linux PRIMARY selection (X11 mouse highlight)
+        try:
+            val = self.clipboard_get(selection='PRIMARY')
+            if val and val.strip():
+                return val.strip()
+        except Exception:
+            pass
+
+        # 4. Linux xclip / xsel (essential for XRDP clipboard sync)
+        if sys.platform.startswith('linux'):
+            for cmd in [
+                ['xclip', '-selection', 'clipboard', '-o'],
+                ['xclip', '-selection', 'primary', '-o'],
+                ['xsel', '-b', '-o'],
+                ['xsel', '-p', '-o'],
+            ]:
+                try:
+                    out = subprocess.check_output(cmd, timeout=1, stderr=subprocess.DEVNULL)
+                    text = out.decode('utf-8', errors='ignore').strip()
+                    if text:
+                        return text
+                except Exception:
+                    pass
+
+        return ""
+
+    def _paste_clipboard(self, entry_widget):
+        """Paste clipboard content into an entry widget."""
+        text = self._get_clipboard_text()
+        if text:
+            entry_widget.delete(0, "end")
+            entry_widget.insert(0, text)
+            inner = getattr(entry_widget, '_entry', entry_widget)
+            try:
+                inner.focus_set()
+                inner.icursor("end")
+            except Exception:
+                pass
+            self._update_status("📋 URL pasted successfully!")
+        else:
+            self._update_status("⚠️ Clipboard is empty or could not be read.")
+
+    def _attach_entry_context_menu(self, ctk_entry):
+        """Attach right-click context menu (Paste, Copy, Clear) and key bindings to an entry widget."""
+        inner = getattr(ctk_entry, '_entry', ctk_entry)
+
+        def paste_action(event=None):
+            text = self._get_clipboard_text()
+            if text:
+                try:
+                    inner.focus_set()
+                    if inner.select_present():
+                        inner.delete("sel.first", "sel.last")
+                except Exception:
+                    pass
+                ctk_entry.insert(inner.index("insert"), text)
+                self._update_status("📋 Pasted successfully!")
+            return "break"
+
+        def copy_action(event=None):
+            try:
+                selected = inner.selection_get()
+            except Exception:
+                selected = inner.get()
+            if selected:
+                self.clipboard_clear()
+                self.clipboard_append(selected)
+                self._update_status("📄 Copied to clipboard!")
+            return "break"
+
+        def cut_action(event=None):
+            copy_action()
+            try:
+                if inner.select_present():
+                    inner.delete("sel.first", "sel.last")
+                else:
+                    ctk_entry.delete(0, "end")
+            except Exception:
+                ctk_entry.delete(0, "end")
+            return "break"
+
+        def select_all_action(event=None):
+            inner.focus_set()
+            inner.select_range(0, "end")
+            inner.icursor("end")
+            return "break"
+
+        def clear_action(event=None):
+            ctk_entry.delete(0, "end")
+            return "break"
+
+        # Right-click context menu
+        menu = tk.Menu(self, tearoff=0, font=("Segoe UI", 10))
+        menu.add_command(label="📋 Paste (Ctrl+V)", command=paste_action)
+        menu.add_command(label="📄 Copy (Ctrl+C)", command=copy_action)
+        menu.add_command(label="✂️ Cut (Ctrl+X)", command=cut_action)
+        menu.add_separator()
+        menu.add_command(label="Select All (Ctrl+A)", command=select_all_action)
+        menu.add_command(label="🗑️ Clear", command=clear_action)
+
+        def show_menu(event):
+            try:
+                inner.focus_set()
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+        widgets_to_bind = [inner]
+        if ctk_entry != inner:
+            widgets_to_bind.append(ctk_entry)
+
+        for w in widgets_to_bind:
+            w.bind("<Control-v>", paste_action)
+            w.bind("<Control-V>", paste_action)
+            w.bind("<Shift-Insert>", paste_action)
+            w.bind("<Button-2>", paste_action)
+            w.bind("<Button-3>", show_menu)
+            w.bind("<Control-Button-1>", show_menu)
+
+    def _attach_textbox_context_menu(self, ctk_textbox):
+        """Attach right-click context menu and key bindings to a CTkTextbox widget."""
+        inner = getattr(ctk_textbox, '_textbox', ctk_textbox)
+
+        def is_editable():
+            try:
+                return str(inner.cget("state")) != "disabled"
+            except Exception:
+                return True
+
+        def paste_action(event=None):
+            if not is_editable():
+                return "break"
+            text = self._get_clipboard_text()
+            if text:
+                try:
+                    inner.focus_set()
+                    inner.delete("sel.first", "sel.last")
+                except Exception:
+                    pass
+                inner.insert("insert", text)
+                self._update_status("📋 Pasted successfully!")
+            return "break"
+
+        def copy_action(event=None):
+            try:
+                selected = inner.get("sel.first", "sel.last")
+            except Exception:
+                selected = inner.get("1.0", "end-1c")
+            if selected:
+                self.clipboard_clear()
+                self.clipboard_append(selected)
+                self._update_status("📄 Copied to clipboard!")
+            return "break"
+
+        def cut_action(event=None):
+            if not is_editable():
+                return copy_action(event)
+            copy_action()
+            try:
+                inner.delete("sel.first", "sel.last")
+            except Exception:
+                inner.delete("1.0", "end")
+            return "break"
+
+        def select_all_action(event=None):
+            inner.focus_set()
+            inner.tag_add("sel", "1.0", "end")
+            return "break"
+
+        def clear_action(event=None):
+            if not is_editable():
+                return "break"
+            inner.delete("1.0", "end")
+            return "break"
+
+        def show_menu(event):
+            try:
+                inner.focus_set()
+                menu = tk.Menu(self, tearoff=0, font=("Segoe UI", 10))
+                if is_editable():
+                    menu.add_command(label="📋 Paste (Ctrl+V)", command=paste_action)
+                menu.add_command(label="📄 Copy (Ctrl+C)", command=copy_action)
+                if is_editable():
+                    menu.add_command(label="✂️ Cut (Ctrl+X)", command=cut_action)
+                menu.add_separator()
+                menu.add_command(label="Select All (Ctrl+A)", command=select_all_action)
+                if is_editable():
+                    menu.add_command(label="🗑️ Clear", command=clear_action)
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                try:
+                    menu.grab_release()
+                except Exception:
+                    pass
+
+        widgets_to_bind = [inner]
+        if ctk_textbox != inner:
+            widgets_to_bind.append(ctk_textbox)
+
+        for w in widgets_to_bind:
+            w.bind("<Control-v>", paste_action)
+            w.bind("<Control-V>", paste_action)
+            w.bind("<Shift-Insert>", paste_action)
+            w.bind("<Button-2>", paste_action)
+            w.bind("<Button-3>", show_menu)
+            w.bind("<Control-Button-1>", show_menu)
 
     def _update_and_restart(self):
         """Pull latest code from GitHub, install dependencies and restart the application cleanly."""
@@ -549,34 +784,39 @@ class App(ctk.CTk):
             subprocess.run(["git", "fetch", "origin", "main"], timeout=15)
             subprocess.run(["git", "reset", "--hard", "origin/main"], timeout=15)
             subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"], timeout=45)
-            if sys.platform.startswith('linux') and not shutil.which('node'):
-                subprocess.run(["apt", "install", "-y", "nodejs"], timeout=60)
+            if sys.platform.startswith('linux'):
+                if not shutil.which('node') or not shutil.which('xclip'):
+                    subprocess.run(["apt", "install", "-y", "nodejs", "xclip"], timeout=60)
         except Exception:
             pass
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
-    def _check_js_runtime(self):
-        """Ensure a JavaScript runtime (Node.js/Deno) is available for YouTube JS challenge solving."""
+    def _check_system_deps(self):
+        """Ensure JavaScript runtime (Node.js) and clipboard tools (xclip) are available."""
         def worker():
             has_node = shutil.which('node') is not None
             has_deno = shutil.which('deno') is not None
-            if not has_node and not has_deno:
-                self.after(0, lambda: self._log("⚠️ Node.js missing! YouTube requires Node.js to decrypt video streams."))
-                if sys.platform.startswith('linux'):
-                    self.after(0, lambda: self._log("⏳ Auto-installing Node.js via apt..."))
-                    try:
-                        subprocess.run(['apt', 'update', '-y'], timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        subprocess.run(['apt', 'install', '-y', 'nodejs'], timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        if shutil.which('node'):
-                            self.after(0, lambda: self._log("✅ Node.js successfully installed! YouTube streams unlocked."))
-                        else:
-                            self.after(0, lambda: self._log("❌ Could not auto-install Node.js. Run: apt install -y nodejs in terminal."))
-                    except Exception as e:
-                        self.after(0, lambda: self._log(f"⚠️ Run 'apt install -y nodejs' in terminal: {e}"))
-            else:
+            if has_node or has_deno:
                 rt = 'Node.js' if has_node else 'Deno'
                 self.after(0, lambda: self._log(f"⚡ JS Runtime: {rt} active (YouTube challenge solver enabled)"))
+            else:
+                self.after(0, lambda: self._log("⚠️ Node.js missing! YouTube requires Node.js to decrypt video streams."))
+
+            if sys.platform.startswith('linux'):
+                missing = []
+                if not has_node and not has_deno:
+                    missing.append('nodejs')
+                if not shutil.which('xclip'):
+                    missing.append('xclip')
+                if missing:
+                    self.after(0, lambda: self._log(f"⏳ Auto-installing missing packages: {' '.join(missing)}..."))
+                    try:
+                        subprocess.run(['apt', 'update', '-y'], timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(['apt', 'install', '-y'] + missing, timeout=90, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        self.after(0, lambda: self._log(f"✅ Successfully installed: {' '.join(missing)}!"))
+                    except Exception as e:
+                        self.after(0, lambda: self._log(f"⚠️ Auto-install notice: {e}"))
         threading.Thread(target=worker, daemon=True).start()
 
     def _browse_dir(self):
@@ -654,6 +894,7 @@ class App(ctk.CTk):
 
         text_box = ctk.CTkTextbox(top, width=620, height=220, font=("Consolas", 11))
         text_box.pack(padx=20, pady=5)
+        self._attach_textbox_context_menu(text_box)
 
         cookie_path = DownloadManager.find_cookie_file() or self._get_cookie_file_path()
         if os.path.exists(cookie_path):
@@ -666,6 +907,19 @@ class App(ctk.CTk):
 
         btn_frame = ctk.CTkFrame(top, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=15)
+
+        def paste_from_clipboard():
+            text = self._get_clipboard_text()
+            if text:
+                text_box.delete("1.0", "end")
+                text_box.insert("1.0", text)
+                self._update_status("📋 Cookies pasted from clipboard!")
+            else:
+                messagebox.showwarning(
+                    "Clipboard Empty",
+                    "Clipboard is empty or could not be read.\n"
+                    "Please copy your YouTube cookies to clipboard first."
+                )
 
         def browse_file():
             fn = filedialog.askopenfilename(
@@ -718,6 +972,12 @@ class App(ctk.CTk):
             text_box.delete("1.0", "end")
             self._update_cookie_status_label()
             messagebox.showinfo("Cleared", "Cookies have been cleared.")
+
+        ctk.CTkButton(
+            btn_frame, text="📋 Paste Clipboard", width=140, fg_color="#17a2b8",
+            hover_color="#138496", font=("Segoe UI", 12, "bold"),
+            command=paste_from_clipboard
+        ).pack(side="left", padx=5)
 
         ctk.CTkButton(
             btn_frame, text="📁 Browse File", width=120, command=browse_file
