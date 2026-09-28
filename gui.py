@@ -656,6 +656,7 @@ class App(ctk.CTk):
 
         def save_cookies():
             content = text_box.get("1.0", "end").strip()
+            content = content.lstrip('\ufeff')
             if not content:
                 messagebox.showwarning("Warning", "Please paste cookies or browse a file first.")
                 return

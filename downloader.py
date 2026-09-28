@@ -205,7 +205,7 @@ class DownloadManager:
         cookie_path = self.find_cookie_file()
         if cookie_path:
             ydl_opts['cookiefile'] = cookie_path
-            ydl_opts['extractor_args']['youtube']['player_client'] = ['web', 'android']
+            ydl_opts.pop('extractor_args', None)
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -393,7 +393,7 @@ class DownloadManager:
         cookie_path = self.find_cookie_file()
         if cookie_path:
             opts['cookiefile'] = cookie_path
-            opts['extractor_args']['youtube']['player_client'] = ['web', 'android']
+            opts.pop('extractor_args', None)
 
         postprocessors = []
 
