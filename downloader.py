@@ -205,7 +205,7 @@ class DownloadManager:
             'remote_components': ['ejs:github'],
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android'],
+                    'player_client': ['default', '-tv', '-tv_embedded'],
                 }
             },
         }
@@ -215,7 +215,6 @@ class DownloadManager:
         cookie_path = self.find_cookie_file()
         if cookie_path:
             ydl_opts['cookiefile'] = cookie_path
-            ydl_opts.pop('extractor_args', None)
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -383,7 +382,7 @@ class DownloadManager:
             'format_sort_force': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android'],
+                    'player_client': ['default', '-tv', '-tv_embedded'],
                 }
             },
         }
@@ -403,7 +402,6 @@ class DownloadManager:
         cookie_path = self.find_cookie_file()
         if cookie_path:
             opts['cookiefile'] = cookie_path
-            opts.pop('extractor_args', None)
 
         postprocessors = []
 

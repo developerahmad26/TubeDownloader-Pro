@@ -15,6 +15,7 @@ pip install --upgrade yt-dlp --quiet 2>/dev/null || true
 
 # 4. Ensure Node.js & xclip are installed for YouTube JS challenge & RDP clipboard
 which node >/dev/null 2>&1 || (apt install -y nodejs --quiet 2>/dev/null || true)
+[ -f /usr/bin/nodejs ] && [ ! -f /usr/bin/node ] && ln -s /usr/bin/nodejs /usr/bin/node 2>/dev/null || true
 which xclip >/dev/null 2>&1 || (apt install -y xclip --quiet 2>/dev/null || true)
 
 # 5. Launch application
