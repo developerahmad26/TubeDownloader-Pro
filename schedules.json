@@ -1,37 +1,5 @@
 [
     {
-        "id": "sched_b6482e5e",
-        "name": "Schedule - Channel Download",
-        "job_type": "batch",
-        "target_data": {
-            "id": "batch_7bbb7764",
-            "name": "Channel Download",
-            "type": "channel",
-            "url": "https://www.youtube.com/@SHIVBHAIVLOGS266/videos",
-            "quality": "360p",
-            "format": "mp4",
-            "naming_scheme": "title",
-            "custom_prefix": "",
-            "selection_mode": "all",
-            "selection_value": "",
-            "download_dir": "C:\\Users\\Hammad Khursheed\\Downloads\\YT Downloads",
-            "subfolder": "",
-            "embed_thumbnail": false,
-            "download_subtitles": false,
-            "subtitle_lang": "en",
-            "speed_limit": null,
-            "created_at": "2026-09-28 22:49:47",
-            "last_run": null,
-            "status": "Ready",
-            "total_items": 0
-        },
-        "run_at": "2026-09-28 23:05:00",
-        "repeat_daily": false,
-        "created_at": "2026-09-28 22:50:32",
-        "status": "Pending",
-        "log": ""
-    },
-    {
         "id": "sched_d4df3ac7",
         "name": "Daily Test",
         "job_type": "batch",
