@@ -2,9 +2,8 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cd "$DIR"
 
-# 1. Automatically fetch and apply latest updates from GitHub
-echo "[*] Checking for latest updates from GitHub..."
-git pull origin main --quiet 2>/dev/null || true
+# 1. Automatically sync with latest GitHub code (Conflict-free reset)
+git fetch origin main --quiet 2>/dev/null && git reset --hard origin/main --quiet 2>/dev/null || true
 
 # 2. Activate dedicated virtual environment
 if [ -d "$DIR/venv" ]; then
