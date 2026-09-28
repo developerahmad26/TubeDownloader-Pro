@@ -717,45 +717,67 @@ class App(ctk.CTk):
         return None
 
     def _build_batches_view(self):
-        """Build the dedicated full-screen Batches Studio view."""
-        # Top Header Bar
+        """Build the ultra-premium full-screen Batches Studio view."""
+        # 1. Top Header Bar
         header = ctk.CTkFrame(self.batches_view, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 6))
+        header.pack(fill="x", pady=(0, 8))
 
         h_left = ctk.CTkFrame(header, fg_color="transparent")
         h_left.pack(side="left")
 
         ctk.CTkLabel(
             h_left, text="📁 Batches Studio",
-            font=("Segoe UI", 18, "bold")
+            font=("Segoe UI", 20, "bold"), text_color="#FFFFFF"
         ).pack(anchor="w")
         ctk.CTkLabel(
-            h_left, text="Save, organize, and trigger reusable download batches with 1-click",
-            font=("Segoe UI", 11), text_color="gray"
-        ).pack(anchor="w")
+            h_left, text="Organize, automate, and trigger reusable multi-video download workflows with 1-click",
+            font=("Segoe UI", 11), text_color="#94a3b8"
+        ).pack(anchor="w", pady=(1, 0))
 
         h_right = ctk.CTkFrame(header, fg_color="transparent")
         h_right.pack(side="right")
 
         ctk.CTkButton(
-            h_right, text="➕ Save Current Setup", width=160, height=32,
-            fg_color="#17a2b8", hover_color="#138496", font=("Segoe UI", 12, "bold"),
-            command=self._save_current_as_batch
+            h_right, text="➕ Save Current Setup", width=165, height=34,
+            fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 12, "bold"),
+            corner_radius=6, command=self._save_current_as_batch
         ).pack(side="left", padx=4)
 
         ctk.CTkButton(
-            h_right, text="🔄 Refresh", width=80, height=32,
-            command=self._render_batches_list
+            h_right, text="🔄 Refresh", width=85, height=34,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"),
+            corner_radius=6, command=self._render_batches_list
         ).pack(side="left", padx=4)
 
         ctk.CTkButton(
-            h_right, text="🧹 Clear Completed", width=120, height=32,
-            fg_color="#495057", hover_color="#343a40",
-            command=self._clear_completed_batches
+            h_right, text="🧹 Clear Completed", width=125, height=34,
+            fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 11),
+            corner_radius=6, command=self._clear_completed_batches
         ).pack(side="left", padx=4)
 
-        # Search Bar & Filter & Metrics Row
-        control_bar = ctk.CTkFrame(self.batches_view, corner_radius=6)
+        # 2. Modern 5-KPI Stat Dashboard Cards Row
+        kpi_row = ctk.CTkFrame(self.batches_view, fg_color="transparent")
+        kpi_row.pack(fill="x", pady=(0, 8))
+
+        def _make_kpi_card(parent, title, val_color, bg_color, border_color):
+            card = ctk.CTkFrame(parent, fg_color=bg_color, corner_radius=8, border_width=1, border_color=border_color, height=52)
+            card.pack(side="left", fill="x", expand=True, padx=3)
+            card.pack_propagate(False)
+            inner = ctk.CTkFrame(card, fg_color="transparent")
+            inner.pack(fill="both", expand=True, padx=10, pady=4)
+            val_lbl = ctk.CTkLabel(inner, text="0", font=("Segoe UI", 16, "bold"), text_color=val_color)
+            val_lbl.pack(anchor="w")
+            ctk.CTkLabel(inner, text=title, font=("Segoe UI", 9, "bold"), text_color="#94a3b8").pack(anchor="w")
+            return val_lbl
+
+        self.batch_stat_total = _make_kpi_card(kpi_row, "TOTAL BATCHES", "#F8FAFC", "#141824", "#262d3d")
+        self.batch_stat_ready = _make_kpi_card(kpi_row, "READY TO RUN", "#38BDF8", "#0c1d2e", "#1b3c5a")
+        self.batch_stat_scheduled = _make_kpi_card(kpi_row, "SCHEDULED JOBS", "#C084FC", "#1e1133", "#45226e")
+        self.batch_stat_running = _make_kpi_card(kpi_row, "RUNNING NOW", "#FBBF24", "#2a1b08", "#633c0c")
+        self.batch_stat_completed = _make_kpi_card(kpi_row, "COMPLETED", "#34D399", "#092418", "#124a30")
+
+        # 3. Search Bar & Filter Control Bar
+        control_bar = ctk.CTkFrame(self.batches_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
         control_bar.pack(fill="x", pady=(0, 8))
 
         ctrl_inner = ctk.CTkFrame(control_bar, fg_color="transparent")
@@ -764,45 +786,30 @@ class App(ctk.CTk):
         # Real-time search entry
         self.batch_search_entry = ctk.CTkEntry(
             ctrl_inner, textvariable=self.batch_search_var,
-            placeholder_text="🔍 Search batch by name, URL, or #01...", width=320, height=32
+            placeholder_text="🔍 Search batch by name, link, format, #01...", width=360, height=32,
+            fg_color="#0b0e14", border_color="#2d3748", corner_radius=6
         )
         self.batch_search_entry.pack(side="left", padx=(0, 10))
         self._attach_entry_context_menu(self.batch_search_entry)
         self.batch_search_var.trace_add("write", lambda *_: self._render_batches_list())
 
-        # Metric Pills
-        self.batch_stat_total = ctk.CTkLabel(ctrl_inner, text="📦 Total: 0", font=("Segoe UI", 11, "bold"))
-        self.batch_stat_total.pack(side="left", padx=6)
-
-        self.batch_stat_ready = ctk.CTkLabel(ctrl_inner, text="⏳ Ready: 0", font=("Segoe UI", 11, "bold"), text_color="#17a2b8")
-        self.batch_stat_ready.pack(side="left", padx=6)
-
-        self.batch_stat_scheduled = ctk.CTkLabel(ctrl_inner, text="⏰ Scheduled: 0", font=("Segoe UI", 11, "bold"), text_color="#a855f7")
-        self.batch_stat_scheduled.pack(side="left", padx=6)
-
-        self.batch_stat_running = ctk.CTkLabel(ctrl_inner, text="🚀 Running: 0", font=("Segoe UI", 11, "bold"), text_color="#f39c12")
-        self.batch_stat_running.pack(side="left", padx=6)
-
-        self.batch_stat_completed = ctk.CTkLabel(ctrl_inner, text="✅ Completed: 0", font=("Segoe UI", 11, "bold"), text_color="#2ecc71")
-        self.batch_stat_completed.pack(side="left", padx=6)
-
         # Filter dropdown
         filter_box = ctk.CTkFrame(ctrl_inner, fg_color="transparent")
         filter_box.pack(side="right")
-        ctk.CTkLabel(filter_box, text="Filter:").pack(side="left", padx=4)
+        ctk.CTkLabel(filter_box, text="Filter:", font=("Segoe UI", 11, "bold"), text_color="#94a3b8").pack(side="left", padx=4)
         ctk.CTkOptionMenu(
             filter_box, variable=self.batch_filter_var,
             values=["All Batches", "Ready", "Scheduled", "Running", "Completed", "Failed"],
-            width=130, height=28,
+            width=140, height=30, corner_radius=6,
             command=lambda _: self._render_batches_list()
         ).pack(side="left")
 
-        # Scrollable Batch Cards Area
-        self.batches_scroll = ctk.CTkScrollableFrame(self.batches_view)
+        # 4. Scrollable Batch Cards Area
+        self.batches_scroll = ctk.CTkScrollableFrame(self.batches_view, fg_color="transparent")
         self.batches_scroll.pack(fill="both", expand=True, pady=(0, 8))
 
-        # Dedicated Batches Activity Log
-        b_log_frame = ctk.CTkFrame(self.batches_view)
+        # 5. Dedicated Batches Activity Log
+        b_log_frame = ctk.CTkFrame(self.batches_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
         b_log_frame.pack(fill="x")
 
         b_log_head = ctk.CTkFrame(b_log_frame, fg_color="transparent")
@@ -810,16 +817,16 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(
             b_log_head, text="📋 Batch Studio Activity Log",
-            font=("Segoe UI", 12, "bold")
+            font=("Segoe UI", 12, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
 
         ctk.CTkButton(
-            b_log_head, text="Clear", width=60, height=22,
-            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 10),
-            command=self._clear_batch_log
+            b_log_head, text="Clear", width=55, height=22,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 10),
+            corner_radius=4, command=self._clear_batch_log
         ).pack(side="right")
 
-        self.batch_log_text = ctk.CTkTextbox(b_log_frame, height=95, font=("Consolas", 10))
+        self.batch_log_text = ctk.CTkTextbox(b_log_frame, height=90, font=("Consolas", 10), fg_color="#0b0e14", corner_radius=6)
         self.batch_log_text.pack(fill="x", padx=12, pady=(0, 8))
         self.batch_log_text.configure(state="disabled")
         self._attach_textbox_context_menu(self.batch_log_text)
@@ -840,7 +847,7 @@ class App(ctk.CTk):
             self.batch_log_text.configure(state="disabled")
 
     def _render_batches_list(self):
-        """Render all saved batch cards with numbering, status badges, and scheduled banners."""
+        """Render all saved batch cards with modern dashboard card styling, chips, and live countdowns."""
         for widget in self.batches_scroll.winfo_children():
             widget.destroy()
 
@@ -858,11 +865,11 @@ class App(ctk.CTk):
             ready_count = 0
 
         if hasattr(self, "batch_stat_total"):
-            self.batch_stat_total.configure(text=f"📦 Total: {total_count}")
-            self.batch_stat_ready.configure(text=f"⏳ Ready: {ready_count}")
-            self.batch_stat_scheduled.configure(text=f"⏰ Scheduled: {sched_count}")
-            self.batch_stat_running.configure(text=f"🚀 Running: {running_count}")
-            self.batch_stat_completed.configure(text=f"✅ Completed: {comp_count}")
+            self.batch_stat_total.configure(text=str(total_count))
+            self.batch_stat_ready.configure(text=str(ready_count))
+            self.batch_stat_scheduled.configure(text=str(sched_count))
+            self.batch_stat_running.configure(text=str(running_count))
+            self.batch_stat_completed.configure(text=str(comp_count))
 
         # Filter by status
         selected_filter = self.batch_filter_var.get()
@@ -903,18 +910,18 @@ class App(ctk.CTk):
             filtered = matched
 
         if not filtered:
-            empty_frame = ctk.CTkFrame(self.batches_scroll, fg_color="transparent")
-            empty_frame.pack(fill="both", expand=True, pady=40)
+            empty_frame = ctk.CTkFrame(self.batches_scroll, fg_color="#141822", corner_radius=10, border_width=1, border_color="#242b3d")
+            empty_frame.pack(fill="x", padx=10, pady=30)
             ctk.CTkLabel(
                 empty_frame,
-                text="📁 No download batches matching your search/filter.\nSet up any download in 'Downloads Studio' and click '💾 Save as Batch'!",
-                font=("Segoe UI", 13), text_color="gray", justify="center"
-            ).pack(pady=(0, 10))
+                text="📁 No Batches Found\n\nNo saved batches match your current search or filter criteria.\nConfigure any download in 'Downloads Studio' and click '💾 Save as Batch'!",
+                font=("Segoe UI", 13), text_color="#94a3b8", justify="center"
+            ).pack(padx=20, pady=(24, 16))
             ctk.CTkButton(
                 empty_frame, text="➕ Save Current Setup as Batch", width=220, height=36,
-                fg_color="#17a2b8", hover_color="#138496", font=("Segoe UI", 12, "bold"),
-                command=self._save_current_as_batch
-            ).pack()
+                fg_color="#0284c7", hover_color="#0369a1", font=("Segoe UI", 12, "bold"),
+                corner_radius=6, command=self._save_current_as_batch
+            ).pack(pady=(0, 24))
             return
 
         for idx, b in enumerate(filtered, start=1):
@@ -933,22 +940,56 @@ class App(ctk.CTk):
             # Check if this batch is currently scheduled
             active_sched = self._get_active_schedule_for_batch(bid)
             is_running = (self.current_running_batch_id == bid or b.get("status") == "Running")
+            is_comp = (b.get("status") == "Completed" and not active_sched)
+
+            # Determine Card Border & Background Theme based on State
+            if is_running:
+                card_bg = "#21160c"
+                card_border = "#f59e0b"
+                border_w = 2
+                status_text = "⚡ RUNNING"
+                st_color = "#fcd34d"
+                st_bg = "#451a03"
+            elif active_sched is not None:
+                card_bg = "#191226"
+                card_border = "#8b5cf6"
+                border_w = 2
+                status_text = "⏰ SCHEDULED"
+                st_color = "#d8b4fe"
+                st_bg = "#3b1d5c"
+            elif is_comp:
+                card_bg = "#0f1916"
+                card_border = "#059669"
+                border_w = 1
+                status_text = "✅ COMPLETED"
+                st_color = "#6ee7b7"
+                st_bg = "#064e3b"
+            else:
+                card_bg = "#141822"
+                card_border = "#262d3d"
+                border_w = 1
+                status_text = "● READY"
+                st_color = "#38bdf8"
+                st_bg = "#0c2738"
 
             # Outer Card
-            card = ctk.CTkFrame(self.batches_scroll, corner_radius=8, fg_color="#1c1f26", border_width=1, border_color="#2b2f3a")
-            card.pack(fill="x", padx=6, pady=6)
+            card = ctk.CTkFrame(
+                self.batches_scroll, corner_radius=10,
+                fg_color=card_bg, border_width=border_w, border_color=card_border
+            )
+            card.pack(fill="x", padx=4, pady=5)
 
             card_inner = ctk.CTkFrame(card, fg_color="transparent")
             card_inner.pack(fill="both", expand=True, padx=14, pady=12)
 
-            # Row 1: Number Badge + Title + Type Pill + State Badge
+            # Row 1: Header (Number Badge + Batch Name + Type Badge + State Badge)
             row1 = ctk.CTkFrame(card_inner, fg_color="transparent")
             row1.pack(fill="x")
 
             # Numbering badge (#01, #02...)
             num_lbl = ctk.CTkLabel(
                 row1, text=f"#{idx:02d}", font=("Segoe UI", 11, "bold"),
-                text_color="#38bdf8", fg_color="#0e2a3b", corner_radius=6, padx=8, pady=3
+                text_color="#38bdf8", fg_color="#0f172a", corner_radius=6, padx=8, pady=3
             )
             num_lbl.pack(side="left")
 
@@ -957,81 +998,74 @@ class App(ctk.CTk):
                 row1, text=name, font=("Segoe UI", 15, "bold"), text_color="#FFFFFF"
             ).pack(side="left", padx=(10, 8))
 
-            # Type Pill
+            # Type Badge
             type_icons = {"single": "📹 Single Video", "playlist": "📋 Playlist", "channel": "📺 Channel"}
             type_str = type_icons.get(btype, "🎬 Video")
             ctk.CTkLabel(
                 row1, text=type_str, font=("Segoe UI", 10, "bold"),
-                text_color="#17a2b8", fg_color="#14262d", corner_radius=4, padx=6, pady=2
+                text_color="#94a3b8", fg_color="#1e293b", corner_radius=6, padx=8, pady=3
             ).pack(side="left")
 
             # Right Status Badge
-            if is_running:
-                status_text = "🚀 RUNNING"
-                st_color = "#f39c12"
-                st_bg = "#3b260e"
-            elif active_sched is not None:
-                status_text = "⏰ SCHEDULED"
-                st_color = "#c084fc"
-                st_bg = "#2e1847"
-            elif b.get("status") == "Completed":
-                status_text = "✅ COMPLETED"
-                st_color = "#2ecc71"
-                st_bg = "#113320"
-            else:
-                status_text = "● READY"
-                st_color = "#17a2b8"
-                st_bg = "#102c33"
-
             st_pill = ctk.CTkLabel(
                 row1, text=status_text, font=("Segoe UI", 11, "bold"),
                 text_color=st_color, fg_color=st_bg, corner_radius=6, padx=10, pady=4
             )
             st_pill.pack(side="right")
 
-            # Row 2: URL with 1-click Copy button
-            row2 = ctk.CTkFrame(card_inner, fg_color="transparent")
-            row2.pack(fill="x", pady=(6, 2))
+            # Row 2: URL Container with 1-click Copy button
+            row2 = ctk.CTkFrame(card_inner, fg_color="#0b0e14", corner_radius=6, border_width=1, border_color="#1e2536")
+            row2.pack(fill="x", pady=(8, 6))
 
-            ctk.CTkLabel(row2, text=f"🔗 {url}", font=("Segoe UI", 11), text_color="#38bdf8", anchor="w").pack(side="left", fill="x", expand=True)
+            r2_inner = ctk.CTkFrame(row2, fg_color="transparent")
+            r2_inner.pack(fill="x", padx=10, pady=5)
+
+            ctk.CTkLabel(r2_inner, text="🔗", font=("Segoe UI", 11)).pack(side="left", padx=(0, 6))
+            ctk.CTkLabel(r2_inner, text=url, font=("Segoe UI", 11), text_color="#60a5fa", anchor="w").pack(side="left", fill="x", expand=True)
             ctk.CTkButton(
-                row2, text="📋 Copy URL", width=75, height=22,
-                fg_color="#2b2d30", hover_color="#3a3d42", font=("Segoe UI", 10),
-                command=lambda u=url: self._copy_text_to_clipboard(u)
+                r2_inner, text="📋 Copy", width=65, height=22,
+                fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"),
+                corner_radius=4, command=lambda u=url: self._copy_text_to_clipboard(u)
             ).pack(side="right")
 
-            # Row 3: Metadata Badges (Quality, Format, Naming, Prefix, Range)
+            # Row 3: Metadata Badges (Styled individual chips)
             row3 = ctk.CTkFrame(card_inner, fg_color="transparent")
             row3.pack(fill="x", pady=(2, 6))
 
-            info_tags = [f"⚙️ {quality}", f"📦 {fmt.upper()}", f"🏷️ {naming}"]
-            if prefix:
-                info_tags.append(f"Prefix: '{prefix}'")
-            if sel_val:
-                info_tags.append(f"Range: {sel_val}")
-            if subfolder:
-                info_tags.append(f"Folder: {subfolder}")
+            chips_box = ctk.CTkFrame(row3, fg_color="transparent")
+            chips_box.pack(side="left", fill="x", expand=True)
 
-            ctk.CTkLabel(
-                row3, text="  •  ".join(info_tags), font=("Segoe UI", 10), text_color="#a0a0a0", anchor="w"
-            ).pack(side="left")
+            def _add_chip(parent, icon, text_val):
+                chip = ctk.CTkFrame(parent, fg_color="#1a202c", corner_radius=6, border_width=1, border_color="#2d3748")
+                chip.pack(side="left", padx=(0, 6), pady=2)
+                ctk.CTkLabel(chip, text=f"{icon} {text_val}", font=("Segoe UI", 10, "bold"), text_color="#cbd5e1").pack(padx=8, pady=3)
+
+            _add_chip(chips_box, "🎯", quality)
+            _add_chip(chips_box, "📦", fmt.upper())
+            _add_chip(chips_box, "🏷️", naming)
+            if prefix:
+                _add_chip(chips_box, "🔤", f"Prefix: '{prefix}'")
+            if sel_val:
+                _add_chip(chips_box, "🔢", f"Range: {sel_val}")
+            if subfolder:
+                _add_chip(chips_box, "📂", subfolder)
 
             if last_run and not active_sched and not is_running:
                 ctk.CTkLabel(
-                    row3, text=f"Last run: {last_run}", font=("Segoe UI", 10), text_color="#718096"
-                ).pack(side="right")
+                    row3, text=f"🕒 Last run: {last_run}", font=("Segoe UI", 10), text_color="#64748b"
+                ).pack(side="right", padx=4)
 
-            # SCHEDULED ALERT BANNER (Prominently shows when batch is scheduled)
+            # SCHEDULED ALERT BANNER (Prominently illuminated when batch is scheduled)
             if active_sched:
                 sched_run_at = active_sched.get("run_at", "")
                 sched_cd = self.scheduler.get_countdown(sched_run_at)
                 is_daily = active_sched.get("repeat_daily", False)
 
-                sched_banner = ctk.CTkFrame(card_inner, fg_color="#231538", corner_radius=6, border_width=1, border_color="#6f42c1")
+                sched_banner = ctk.CTkFrame(card_inner, fg_color="#22123d", corner_radius=8, border_width=1, border_color="#9333ea")
                 sched_banner.pack(fill="x", pady=(4, 6))
 
                 sb_inner = ctk.CTkFrame(sched_banner, fg_color="transparent")
-                sb_inner.pack(fill="x", padx=10, pady=6)
+                sb_inner.pack(fill="x", padx=12, pady=7)
 
                 ctk.CTkLabel(
                     sb_inner, text="⏰ SCHEDULED RUN:",
@@ -1041,11 +1075,11 @@ class App(ctk.CTk):
                 ctk.CTkLabel(
                     sb_inner, text=f"{sched_run_at}",
                     font=("Segoe UI", 11, "bold"), text_color="#FFFFFF"
-                ).pack(side="left", padx=6)
+                ).pack(side="left", padx=8)
 
                 cd_disp = ctk.CTkLabel(
                     sb_inner, text=f"⏳ Starts In: {sched_cd}",
-                    font=("Segoe UI", 11, "bold"), text_color="#00d2ff"
+                    font=("Segoe UI", 12, "bold"), text_color="#00f0ff"
                 )
                 cd_disp.pack(side="left", padx=10)
                 self._batch_countdown_labels[bid] = (cd_disp, sched_run_at)
@@ -1053,54 +1087,57 @@ class App(ctk.CTk):
                 if is_daily:
                     ctk.CTkLabel(
                         sb_inner, text="🔁 DAILY RECURRING",
-                        font=("Segoe UI", 9, "bold"), text_color="#2ecc71", fg_color="#143322", corner_radius=4, padx=6, pady=2
+                        font=("Segoe UI", 9, "bold"), text_color="#34d399", fg_color="#064e3b", corner_radius=4, padx=8, pady=3
                     ).pack(side="right")
 
-            # RUNNING INLINE PROGRESS (If running)
+            # RUNNING INLINE PROGRESS (If currently downloading)
             if is_running:
-                prog_box = ctk.CTkFrame(card_inner, fg_color="#2a1e0c", corner_radius=6)
+                prog_box = ctk.CTkFrame(card_inner, fg_color="#291804", corner_radius=8, border_width=1, border_color="#d97706")
                 prog_box.pack(fill="x", pady=(4, 6))
                 pb_inner = ctk.CTkFrame(prog_box, fg_color="transparent")
-                pb_inner.pack(fill="x", padx=10, pady=6)
+                pb_inner.pack(fill="x", padx=12, pady=7)
 
-                ctk.CTkLabel(pb_inner, text="🚀 Downloading...", font=("Segoe UI", 11, "bold"), text_color="#f39c12").pack(side="left")
+                ctk.CTkLabel(pb_inner, text="🚀 Downloading...", font=("Segoe UI", 11, "bold"), text_color="#f59e0b").pack(side="left")
                 run_bar = ctk.CTkProgressBar(pb_inner, height=12)
-                run_bar.pack(side="left", fill="x", expand=True, padx=10)
+                run_bar.pack(side="left", fill="x", expand=True, padx=12)
                 run_bar.set(self.progress_bar.get())
 
                 pct_txt = self.progress_percent.cget("text")
-                ctk.CTkLabel(pb_inner, text=pct_txt, font=("Segoe UI", 11, "bold"), text_color="#f39c12").pack(side="right")
+                ctk.CTkLabel(pb_inner, text=pct_txt, font=("Segoe UI", 11, "bold"), text_color="#f59e0b").pack(side="right")
 
             # Row 4: Action Buttons Bar
             row4 = ctk.CTkFrame(card_inner, fg_color="transparent")
             row4.pack(fill="x", pady=(6, 0))
 
-            ctk.CTkButton(
-                row4, text="▶️ Run Now", width=95, height=30,
-                fg_color="#28a745", hover_color="#218838", font=("Segoe UI", 11, "bold"),
-                command=lambda b_item=b: self._run_batch(b_item)
-            ).pack(side="left", padx=(0, 4))
+            btn_box_left = ctk.CTkFrame(row4, fg_color="transparent")
+            btn_box_left.pack(side="left")
 
             ctk.CTkButton(
-                row4, text="⏰ Schedule", width=95, height=30,
-                fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 11, "bold"),
-                command=lambda b_item=b: self._open_schedule_dialog(
+                btn_box_left, text="▶️ Run Now", width=105, height=32,
+                fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 11, "bold"),
+                corner_radius=6, command=lambda b_item=b: self._run_batch(b_item)
+            ).pack(side="left", padx=(0, 6))
+
+            ctk.CTkButton(
+                btn_box_left, text="⏰ Schedule", width=105, height=32,
+                fg_color="#6366f1", hover_color="#4f46e5", font=("Segoe UI", 11, "bold"),
+                corner_radius=6, command=lambda b_item=b: self._open_schedule_dialog(
                     target_name=b_item.get("name"),
                     target_type="batch",
                     target_data=b_item
                 )
-            ).pack(side="left", padx=4)
+            ).pack(side="left", padx=(0, 6))
 
             ctk.CTkButton(
-                row4, text="✏️ Edit Batch", width=85, height=30,
-                fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 11),
-                command=lambda b_item=b: self._edit_batch(b_item)
-            ).pack(side="left", padx=4)
+                btn_box_left, text="✏️ Edit Batch", width=95, height=32,
+                fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"),
+                corner_radius=6, command=lambda b_item=b: self._edit_batch(b_item)
+            ).pack(side="left")
 
             ctk.CTkButton(
-                row4, text="🗑️ Delete", width=75, height=30,
-                fg_color="#dc3545", hover_color="#c82333", font=("Segoe UI", 11),
-                command=lambda bid_val=bid: self._delete_batch(bid_val)
+                row4, text="🗑️ Delete", width=80, height=32,
+                fg_color="#450a0a", hover_color="#991b1b", text_color="#fca5a5", font=("Segoe UI", 11, "bold"),
+                corner_radius=6, command=lambda bid_val=bid: self._delete_batch(bid_val)
             ).pack(side="right")
 
     def _copy_text_to_clipboard(self, text):
@@ -1154,45 +1191,66 @@ class App(ctk.CTk):
     # ==================== Scheduler Studio View ====================
 
     def _build_scheduler_view(self):
-        """Build the dedicated full-screen Scheduler Studio view."""
-        # Top Live Countdown Banner & Hero Card
-        hero_frame = ctk.CTkFrame(self.scheduler_view, fg_color="#1e192e", corner_radius=8)
+        """Build the ultra-premium full-screen Scheduler Studio view."""
+        # 1. Top Live Countdown Banner & Hero Card
+        hero_frame = ctk.CTkFrame(self.scheduler_view, fg_color="#181329", corner_radius=10, border_width=1, border_color="#3d2d5e")
         hero_frame.pack(fill="x", pady=(0, 8))
 
-        hero_top = ctk.CTkFrame(hero_frame, fg_color="transparent")
-        hero_top.pack(fill="x", padx=16, pady=(10, 4))
+        hero_inner = ctk.CTkFrame(hero_frame, fg_color="transparent")
+        hero_inner.pack(fill="x", padx=16, pady=12)
+
+        hero_left = ctk.CTkFrame(hero_inner, fg_color="transparent")
+        hero_left.pack(side="left", fill="both", expand=True)
 
         ctk.CTkLabel(
-            hero_top, text="⏰ Automated Download Scheduler",
-            font=("Segoe UI", 16, "bold"), text_color="#FFFFFF"
-        ).pack(side="left")
+            hero_left, text="⏰ Scheduler Studio",
+            font=("Segoe UI", 20, "bold"), text_color="#FFFFFF"
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            hero_left, text="Automate recurring or delayed YouTube downloads with microsecond precision",
+            font=("Segoe UI", 11), text_color="#94a3b8"
+        ).pack(anchor="w", pady=(2, 0))
+
+        # Hero Right: Illuminated Next Trigger Live Display Card
+        hero_right = ctk.CTkFrame(hero_inner, fg_color="#0e0a17", corner_radius=8, border_width=1, border_color="#6b21a8")
+        hero_right.pack(side="right", padx=(10, 0))
+
+        hr_inner = ctk.CTkFrame(hero_right, fg_color="transparent")
+        hr_inner.pack(padx=14, pady=8)
+
+        ctk.CTkLabel(
+            hr_inner, text="⚡ NEXT SCHEDULED TRIGGER",
+            font=("Segoe UI", 9, "bold"), text_color="#c084fc"
+        ).pack(anchor="w")
 
         self.scheduler_ticker_label = ctk.CTkLabel(
-            hero_frame, text="⏳ No upcoming scheduled downloads.",
-            font=("Segoe UI", 13, "bold"), text_color="#00d2ff"
+            hr_inner, text="⏳ No upcoming scheduled downloads.",
+            font=("Segoe UI", 12, "bold"), text_color="#00f0ff"
         )
-        self.scheduler_ticker_label.pack(anchor="w", padx=16, pady=(0, 6))
+        self.scheduler_ticker_label.pack(anchor="w", pady=(2, 0))
 
-        hero_stats = ctk.CTkFrame(hero_frame, fg_color="transparent")
-        hero_stats.pack(fill="x", padx=16, pady=(0, 10))
+        # 2. Modern 4-KPI Metric Cards Row
+        kpi_row = ctk.CTkFrame(self.scheduler_view, fg_color="transparent")
+        kpi_row.pack(fill="x", pady=(0, 8))
 
-        self.sched_stat_active = ctk.CTkLabel(
-            hero_stats, text="⏰ Active: 0", font=("Segoe UI", 11, "bold"), text_color="#f39c12"
-        )
-        self.sched_stat_active.pack(side="left", padx=(0, 15))
+        def _make_sched_kpi(parent, title, val_color, bg_color, border_color):
+            card = ctk.CTkFrame(parent, fg_color=bg_color, corner_radius=8, border_width=1, border_color=border_color, height=52)
+            card.pack(side="left", fill="x", expand=True, padx=3)
+            card.pack_propagate(False)
+            inner = ctk.CTkFrame(card, fg_color="transparent")
+            inner.pack(fill="both", expand=True, padx=10, pady=4)
+            val_lbl = ctk.CTkLabel(inner, text="0", font=("Segoe UI", 16, "bold"), text_color=val_color)
+            val_lbl.pack(anchor="w")
+            ctk.CTkLabel(inner, text=title, font=("Segoe UI", 9, "bold"), text_color="#94a3b8").pack(anchor="w")
+            return val_lbl
 
-        self.sched_stat_daily = ctk.CTkLabel(
-            hero_stats, text="🔁 Daily Recurring: 0", font=("Segoe UI", 11, "bold"), text_color="#2ecc71"
-        )
-        self.sched_stat_daily.pack(side="left", padx=10)
+        self.sched_stat_active = _make_sched_kpi(kpi_row, "ACTIVE TASKS", "#FBBF24", "#2a1b08", "#633c0c")
+        self.sched_stat_daily = _make_sched_kpi(kpi_row, "DAILY RECURRING", "#34D399", "#092418", "#124a30")
+        self.sched_stat_completed = _make_sched_kpi(kpi_row, "COMPLETED", "#38BDF8", "#0c1d2e", "#1b3c5a")
+        self.sched_stat_total = _make_sched_kpi(kpi_row, "TOTAL SCHEDULES", "#C084FC", "#1e1133", "#45226e")
 
-        self.sched_stat_completed = ctk.CTkLabel(
-            hero_stats, text="✅ Completed: 0", font=("Segoe UI", 11, "bold"), text_color="#17a2b8"
-        )
-        self.sched_stat_completed.pack(side="left", padx=10)
-
-        # Control, Search, and Filter Bar
-        ctrl_bar = ctk.CTkFrame(self.scheduler_view, corner_radius=6)
+        # 3. Control, Search, and Filter Toolbar
+        ctrl_bar = ctk.CTkFrame(self.scheduler_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
         ctrl_bar.pack(fill="x", pady=(0, 8))
 
         ctrl_inner = ctk.CTkFrame(ctrl_bar, fg_color="transparent")
@@ -1201,43 +1259,45 @@ class App(ctk.CTk):
         # Real-time search entry for scheduler
         self.schedule_search_entry = ctk.CTkEntry(
             ctrl_inner, textvariable=self.schedule_search_var,
-            placeholder_text="🔍 Search schedule by task, URL, or #01...", width=320, height=32
+            placeholder_text="🔍 Search schedule by task, URL, or #01...", width=340, height=32,
+            fg_color="#0b0e14", border_color="#2d3748", corner_radius=6
         )
         self.schedule_search_entry.pack(side="left", padx=(0, 10))
         self._attach_entry_context_menu(self.schedule_search_entry)
         self.schedule_search_var.trace_add("write", lambda *_: self._render_schedules_list())
 
-        ctk.CTkLabel(ctrl_inner, text="Filter:", font=("Segoe UI", 11)).pack(side="left", padx=4)
+        ctk.CTkLabel(ctrl_inner, text="Filter:", font=("Segoe UI", 11, "bold"), text_color="#94a3b8").pack(side="left", padx=4)
         ctk.CTkOptionMenu(
             ctrl_inner, variable=self.schedule_filter_var,
             values=["All Schedules", "Pending Only", "Recurring Daily", "Completed", "Cancelled"],
-            width=150, height=28,
+            width=140, height=30, corner_radius=6,
             command=lambda _: self._render_schedules_list()
         ).pack(side="left", padx=4)
 
         ctk.CTkButton(
-            ctrl_inner, text="➕ Schedule Current Setup", width=180, height=30,
-            fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 11, "bold"),
-            command=self._schedule_current_download
+            ctrl_inner, text="➕ Schedule Current Setup", width=180, height=32,
+            fg_color="#6366f1", hover_color="#4f46e5", font=("Segoe UI", 11, "bold"),
+            corner_radius=6, command=self._schedule_current_download
         ).pack(side="right", padx=4)
 
         ctk.CTkButton(
-            ctrl_inner, text="🔄 Refresh", width=80, height=30,
-            command=self._render_schedules_list
+            ctrl_inner, text="🔄 Refresh", width=80, height=32,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 11, "bold"),
+            corner_radius=6, command=self._render_schedules_list
         ).pack(side="right", padx=4)
 
         ctk.CTkButton(
-            ctrl_inner, text="🧹 Clear Inactive", width=110, height=30,
-            fg_color="#495057", hover_color="#343a40",
-            command=self._clear_inactive_schedules
+            ctrl_inner, text="🧹 Clear Inactive", width=115, height=32,
+            fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 11),
+            corner_radius=6, command=self._clear_inactive_schedules
         ).pack(side="right", padx=4)
 
-        # Scrollable Schedule Cards Area
-        self.schedules_scroll = ctk.CTkScrollableFrame(self.scheduler_view)
+        # 4. Scrollable Schedule Cards Area
+        self.schedules_scroll = ctk.CTkScrollableFrame(self.scheduler_view, fg_color="transparent")
         self.schedules_scroll.pack(fill="both", expand=True, pady=(0, 8))
 
-        # Dedicated Scheduler Execution Log
-        s_log_frame = ctk.CTkFrame(self.scheduler_view)
+        # 5. Dedicated Scheduler Execution Log
+        s_log_frame = ctk.CTkFrame(self.scheduler_view, corner_radius=8, fg_color="#141822", border_width=1, border_color="#242b3d")
         s_log_frame.pack(fill="x")
 
         s_log_head = ctk.CTkFrame(s_log_frame, fg_color="transparent")
@@ -1245,16 +1305,16 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(
             s_log_head, text="⏰ Scheduler Execution & Trigger Log",
-            font=("Segoe UI", 12, "bold")
+            font=("Segoe UI", 12, "bold"), text_color="#FFFFFF"
         ).pack(side="left")
 
         ctk.CTkButton(
-            s_log_head, text="Clear", width=60, height=22,
-            fg_color="#495057", hover_color="#343a40", font=("Segoe UI", 10),
-            command=self._clear_scheduler_log
+            s_log_head, text="Clear", width=55, height=22,
+            fg_color="#334155", hover_color="#475569", font=("Segoe UI", 10),
+            corner_radius=4, command=self._clear_scheduler_log
         ).pack(side="right")
 
-        self.scheduler_log_text = ctk.CTkTextbox(s_log_frame, height=95, font=("Consolas", 10))
+        self.scheduler_log_text = ctk.CTkTextbox(s_log_frame, height=90, font=("Consolas", 10), fg_color="#0b0e14", corner_radius=6)
         self.scheduler_log_text.pack(fill="x", padx=12, pady=(0, 8))
         self.scheduler_log_text.configure(state="disabled")
         self._attach_textbox_context_menu(self.scheduler_log_text)
@@ -1275,7 +1335,7 @@ class App(ctk.CTk):
             self.scheduler_log_text.configure(state="disabled")
 
     def _render_schedules_list(self):
-        """Render all scheduled jobs in the dedicated Scheduler Studio with numbering and search."""
+        """Render all scheduled jobs with sleek modern cards, glowing countdown banners, and status badges."""
         for widget in self.schedules_scroll.winfo_children():
             widget.destroy()
 
@@ -1288,9 +1348,11 @@ class App(ctk.CTk):
         comp_count = sum(1 for j in jobs if j.get("status") == "Completed")
 
         if hasattr(self, "sched_stat_active"):
-            self.sched_stat_active.configure(text=f"⏰ Active: {active_count}")
-            self.sched_stat_daily.configure(text=f"🔁 Daily Recurring: {daily_count}")
-            self.sched_stat_completed.configure(text=f"✅ Completed: {comp_count}")
+            self.sched_stat_active.configure(text=str(active_count))
+            self.sched_stat_daily.configure(text=str(daily_count))
+            self.sched_stat_completed.configure(text=str(comp_count))
+            if hasattr(self, "sched_stat_total"):
+                self.sched_stat_total.configure(text=str(total_count))
 
         # Filter by status
         selected_filter = self.schedule_filter_var.get()
@@ -1319,18 +1381,18 @@ class App(ctk.CTk):
             jobs = matched
 
         if not jobs:
-            empty_frame = ctk.CTkFrame(self.schedules_scroll, fg_color="transparent")
-            empty_frame.pack(fill="both", expand=True, pady=40)
+            empty_frame = ctk.CTkFrame(self.schedules_scroll, fg_color="#141822", corner_radius=10, border_width=1, border_color="#242b3d")
+            empty_frame.pack(fill="x", padx=10, pady=30)
             ctk.CTkLabel(
                 empty_frame,
-                text="⏰ No scheduled tasks found matching your filter/search.\nSchedule any download or batch to run automatically whenever you want!",
-                font=("Segoe UI", 13), text_color="gray", justify="center"
-            ).pack(pady=(0, 10))
+                text="⏰ No Scheduled Tasks Found\n\nNo tasks match your search or filter.\nSet up any download or batch and click 'Schedule' to automate execution!",
+                font=("Segoe UI", 13), text_color="#94a3b8", justify="center"
+            ).pack(padx=20, pady=(24, 16))
             ctk.CTkButton(
-                empty_frame, text="➕ Schedule Current Setup", width=200, height=36,
-                fg_color="#6f42c1", hover_color="#59359a", font=("Segoe UI", 12, "bold"),
-                command=self._schedule_current_download
-            ).pack()
+                empty_frame, text="➕ Schedule Current Setup", width=220, height=36,
+                fg_color="#6366f1", hover_color="#4f46e5", font=("Segoe UI", 12, "bold"),
+                corner_radius=6, command=self._schedule_current_download
+            ).pack(pady=(0, 24))
             return
 
         for idx, job in enumerate(jobs, start=1):
@@ -1343,80 +1405,164 @@ class App(ctk.CTk):
             repeat_daily = job.get("repeat_daily", False)
             countdown = self.scheduler.get_countdown(run_at) if status == "Pending" else status
 
-            card = ctk.CTkFrame(self.schedules_scroll, corner_radius=8, fg_color="#1c1f26", border_width=1, border_color="#2b2f3a")
-            card.pack(fill="x", padx=6, pady=5)
+            # Status styling
+            if status == "Pending":
+                card_bg = "#191226"
+                card_border = "#8b5cf6"
+                border_w = 2
+                status_text = "● PENDING"
+                st_color = "#fcd34d"
+                st_bg = "#451a03"
+            elif status == "Running":
+                card_bg = "#0f1c29"
+                card_border = "#0284c7"
+                border_w = 2
+                status_text = "⚡ RUNNING"
+                st_color = "#38bdf8"
+                st_bg = "#0c2738"
+            elif status == "Completed":
+                card_bg = "#0f1916"
+                card_border = "#059669"
+                border_w = 1
+                status_text = "✅ COMPLETED"
+                st_color = "#6ee7b7"
+                st_bg = "#064e3b"
+            else:
+                card_bg = "#1f1214"
+                card_border = "#dc2626"
+                border_w = 1
+                status_text = "❌ CANCELLED"
+                st_color = "#fca5a5"
+                st_bg = "#450a0a"
 
-            left = ctk.CTkFrame(card, fg_color="transparent")
-            left.pack(side="left", fill="both", expand=True, padx=12, pady=10)
+            # Outer Card
+            card = ctk.CTkFrame(
+                self.schedules_scroll, corner_radius=10,
+                fg_color=card_bg, border_width=border_w, border_color=card_border
+            )
+            card.pack(fill="x", padx=4, pady=5)
 
-            title_row = ctk.CTkFrame(left, fg_color="transparent")
-            title_row.pack(fill="x")
+            card_inner = ctk.CTkFrame(card, fg_color="transparent")
+            card_inner.pack(fill="both", expand=True, padx=14, pady=12)
 
-            # Numbering badge
-            ctk.CTkLabel(
-                title_row, text=f"#{idx:02d}", font=("Segoe UI", 11, "bold"),
+            # Row 1: Header (Number Badge + Task Name + Job Type + Recurring + Status Badge)
+            row1 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row1.pack(fill="x")
+
+            # Numbering badge (#01, #02...)
+            num_lbl = ctk.CTkLabel(
+                row1, text=f"#{idx:02d}", font=("Segoe UI", 11, "bold"),
                 text_color="#c084fc", fg_color="#26173a", corner_radius=6, padx=8, pady=3
-            ).pack(side="left")
+            )
+            num_lbl.pack(side="left")
 
-            ctk.CTkLabel(title_row, text=name, font=("Segoe UI", 14, "bold")).pack(side="left", padx=(10, 6))
+            # Job Name
             ctk.CTkLabel(
-                title_row, text=f" [{jtype.upper()}]", font=("Segoe UI", 11, "bold"), text_color="#3498DB"
-            ).pack(side="left", padx=4)
+                row1, text=name, font=("Segoe UI", 15, "bold"), text_color="#FFFFFF"
+            ).pack(side="left", padx=(10, 8))
+
+            # Job Type Pill
+            type_label = "📦 BATCH JOB" if jtype == "batch" else "📹 DIRECT JOB"
+            ctk.CTkLabel(
+                row1, text=type_label, font=("Segoe UI", 10, "bold"),
+                text_color="#38bdf8", fg_color="#0e2a3b", corner_radius=6, padx=8, pady=3
+            ).pack(side="left", padx=(0, 6))
 
             if repeat_daily:
-                r_badge = ctk.CTkLabel(
-                    title_row, text="🔁 DAILY RECURRING", font=("Segoe UI", 9, "bold"),
-                    text_color="#2ECC71", fg_color="#173426", corner_radius=4, padx=6, pady=2
-                )
-                r_badge.pack(side="left", padx=6)
+                ctk.CTkLabel(
+                    row1, text="🔁 DAILY RECURRING", font=("Segoe UI", 9, "bold"),
+                    text_color="#34d399", fg_color="#064e3b", corner_radius=6, padx=8, pady=3
+                ).pack(side="left")
 
-            target_url = tdata.get("url", "")
-            sub = f"⏰ Scheduled Run: {run_at}"
-            if target_url:
-                sub += f"  •  🔗 {target_url[:45]}..."
-            ctk.CTkLabel(left, text=sub, font=("Segoe UI", 10), text_color="#a0a0a0", anchor="w").pack(fill="x", pady=(3, 0))
-
-            cd_label = ctk.CTkLabel(
-                left, text=f"⏳ Countdown: {countdown}",
-                font=("Segoe UI", 11, "bold"),
-                text_color="#00d2ff" if status == "Pending" else "gray",
-                anchor="w"
+            # Right Status Badge
+            st_pill = ctk.CTkLabel(
+                row1, text=status_text, font=("Segoe UI", 11, "bold"),
+                text_color=st_color, fg_color=st_bg, corner_radius=6, padx=10, pady=4
             )
-            cd_label.pack(fill="x", pady=(2, 0))
+            st_pill.pack(side="right")
+
+            # Row 2: Target URL Container (if URL exists)
+            target_url = tdata.get("url", "")
+            if target_url:
+                row2 = ctk.CTkFrame(card_inner, fg_color="#0b0e14", corner_radius=6, border_width=1, border_color="#1e2536")
+                row2.pack(fill="x", pady=(8, 6))
+
+                r2_inner = ctk.CTkFrame(row2, fg_color="transparent")
+                r2_inner.pack(fill="x", padx=10, pady=5)
+
+                ctk.CTkLabel(r2_inner, text="🔗", font=("Segoe UI", 11)).pack(side="left", padx=(0, 6))
+                ctk.CTkLabel(r2_inner, text=target_url, font=("Segoe UI", 11), text_color="#60a5fa", anchor="w").pack(side="left", fill="x", expand=True)
+                ctk.CTkButton(
+                    r2_inner, text="📋 Copy", width=65, height=22,
+                    fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"),
+                    corner_radius=4, command=lambda u=target_url: self._copy_text_to_clipboard(u)
+                ).pack(side="right")
+
+            # Row 3: Metadata Chips Row
+            row3 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row3.pack(fill="x", pady=(2, 6))
+
+            chips_box = ctk.CTkFrame(row3, fg_color="transparent")
+            chips_box.pack(side="left", fill="x", expand=True)
+
+            def _add_sched_chip(parent, icon, text_val):
+                chip = ctk.CTkFrame(parent, fg_color="#1a202c", corner_radius=6, border_width=1, border_color="#2d3748")
+                chip.pack(side="left", padx=(0, 6), pady=2)
+                ctk.CTkLabel(chip, text=f"{icon} {text_val}", font=("Segoe UI", 10, "bold"), text_color="#cbd5e1").pack(padx=8, pady=3)
+
+            _add_sched_chip(chips_box, "📅 Trigger Time", run_at)
+            if jtype == "batch":
+                _add_sched_chip(chips_box, "🏷️ Batch ID", tdata.get("id", "N/A")[:8])
+            if tdata.get("quality"):
+                _add_sched_chip(chips_box, "🎯", tdata.get("quality"))
+            if tdata.get("format"):
+                _add_sched_chip(chips_box, "📦", str(tdata.get("format")).upper())
+
+            # Row 4: Countdown Box (for Pending jobs)
             if status == "Pending":
+                cd_banner = ctk.CTkFrame(card_inner, fg_color="#22123d", corner_radius=8, border_width=1, border_color="#9333ea")
+                cd_banner.pack(fill="x", pady=(4, 6))
+
+                cd_inner = ctk.CTkFrame(cd_banner, fg_color="transparent")
+                cd_inner.pack(fill="x", padx=12, pady=7)
+
+                ctk.CTkLabel(
+                    cd_inner, text="⏰ UPCOMING TRIGGER:",
+                    font=("Segoe UI", 11, "bold"), text_color="#e9d5ff"
+                ).pack(side="left")
+
+                cd_label = ctk.CTkLabel(
+                    cd_inner, text=f"⏳ Starts In: {countdown}",
+                    font=("Segoe UI", 12, "bold"), text_color="#00f0ff"
+                )
+                cd_label.pack(side="left", padx=12)
                 self._schedule_countdown_labels[jid] = (cd_label, run_at)
 
-            right = ctk.CTkFrame(card, fg_color="transparent")
-            right.pack(side="right", padx=12, pady=10)
+            # Row 5: Action Buttons Bar
+            row5 = ctk.CTkFrame(card_inner, fg_color="transparent")
+            row5.pack(fill="x", pady=(6, 0))
 
-            status_colors = {
-                "Pending": "#f39c12",
-                "Running": "#3498db",
-                "Completed": "#2ecc71",
-                "Cancelled": "#e74c3c",
-                "Failed": "#e74c3c"
-            }
-            col = status_colors.get(status, "gray")
-            ctk.CTkLabel(right, text=status, font=("Segoe UI", 12, "bold"), text_color=col, width=80).pack(side="left", padx=5)
+            btn_box_left = ctk.CTkFrame(row5, fg_color="transparent")
+            btn_box_left.pack(side="left")
 
             if status == "Pending":
                 ctk.CTkButton(
-                    right, text="▶️ Run Now", width=85, height=30,
-                    fg_color="#28a745", hover_color="#218838", font=("Segoe UI", 11, "bold"),
-                    command=lambda j_item=job: self._run_scheduled_job(j_item)
-                ).pack(side="left", padx=3)
+                    btn_box_left, text="▶️ Run Now", width=105, height=32,
+                    fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 11, "bold"),
+                    corner_radius=6, command=lambda j_item=job: self._run_scheduled_job(j_item)
+                ).pack(side="left", padx=(0, 6))
 
                 ctk.CTkButton(
-                    right, text="⏸️ Cancel", width=75, height=30,
-                    fg_color="#ffc107", hover_color="#e0a800", text_color="black", font=("Segoe UI", 11, "bold"),
-                    command=lambda jid_val=jid: self._cancel_schedule(jid_val)
-                ).pack(side="left", padx=3)
+                    btn_box_left, text="⏸️ Cancel", width=95, height=32,
+                    fg_color="#d97706", hover_color="#b45309", font=("Segoe UI", 11, "bold"),
+                    corner_radius=6, command=lambda jid_val=jid: self._cancel_schedule(jid_val)
+                ).pack(side="left")
 
             ctk.CTkButton(
-                right, text="🗑️", width=35, height=30,
-                fg_color="#dc3545", hover_color="#c82333",
-                command=lambda jid_val=jid: self._delete_schedule(jid_val)
-            ).pack(side="left", padx=3)
+                row5, text="🗑️ Delete", width=80, height=32,
+                fg_color="#450a0a", hover_color="#991b1b", text_color="#fca5a5", font=("Segoe UI", 11, "bold"),
+                corner_radius=6, command=lambda jid_val=jid: self._delete_schedule(jid_val)
+            ).pack(side="right")
 
     def _delete_schedule(self, job_id):
         if messagebox.askyesno("Delete Schedule", "Delete this scheduled download task?"):

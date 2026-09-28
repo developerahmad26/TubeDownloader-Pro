@@ -1,0 +1,12 @@
+{
+    "default_quality": "360p",
+    "default_format": "mp4",
+    "default_naming_scheme": "Video Title",
+    "default_custom_prefix": "",
+    "default_download_dir": "C:\\Users\\Hammad Khursheed\\Downloads\\YT Downloads",
+    "default_auto_subfolder": false,
+    "default_embed_thumbnail": false,
+    "default_download_subtitles": false,
+    "default_subtitle_lang": "en",
+    "default_speed_limit": ""
+}

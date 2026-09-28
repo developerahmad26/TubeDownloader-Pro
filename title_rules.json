@@ -1,0 +1,11 @@
+{
+    "rewrite_mode": "smart_rephrase",
+    "hook_style": "Dramatic Hook",
+    "gemini_api_key": "",
+    "remove_emojis": true,
+    "remove_hashtags": true,
+    "remove_mentions": true,
+    "remove_resolution_tags": true,
+    "clean_separators": true,
+    "custom_replacements": {}
+}
