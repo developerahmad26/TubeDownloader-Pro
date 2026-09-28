@@ -565,12 +565,19 @@ class DownloadManager:
                         embed_thumbnail=False, download_subtitles=False,
                         subtitle_lang="en", output_format="mp4",
                         speed_limit=None, proxy=None,
-                        progress_callback=None, status_callback=None):
+                        progress_callback=None, status_callback=None,
+                        video_count_callback=None):
         """Download a single video."""
         self.is_downloading = True
         self.cancel_flag = False
         self.total_videos = 1
         self.completed_videos = 0
+
+        if video_count_callback:
+            try:
+                video_count_callback(0, 1, 1, "Downloading single video...")
+            except TypeError:
+                video_count_callback(1)
 
         try:
             video_title = None
@@ -676,6 +683,11 @@ class DownloadManager:
             if result == 0:
                 self.completed_videos = 1
                 self.current_progress = 100
+                if video_count_callback:
+                    try:
+                        video_count_callback(1, 1, 1, "Completed")
+                    except TypeError:
+                        video_count_callback(1)
                 if status_callback:
                     status_callback("✅ Download completed successfully!")
                 if progress_callback:
@@ -733,8 +745,19 @@ class DownloadManager:
             selected_videos = self._apply_selection(videos, selection_mode, selection_value)
             self.total_videos = len(selected_videos)
 
-            if video_count_callback:
-                video_count_callback(self.total_videos)
+            def _report_count(current_idx=0, current_title=""):
+                if video_count_callback:
+                    try:
+                        video_count_callback(
+                            self.completed_videos,
+                            self.total_videos,
+                            current_idx,
+                            current_title
+                        )
+                    except TypeError:
+                        video_count_callback(self.total_videos)
+
+            _report_count(0, f"Starting batch download of {self.total_videos} videos...")
 
             if status_callback:
                 status_callback(f"Starting batch download of {self.total_videos} videos...")
@@ -748,6 +771,7 @@ class DownloadManager:
 
             for idx, video in enumerate(selected_videos, 1):
                 if self.cancel_flag:
+                    _report_count(idx, "Download cancelled")
                     if status_callback:
                         status_callback(
                             f"❌ Cancelled after {self.completed_videos}/{self.total_videos} videos."
@@ -758,10 +782,13 @@ class DownloadManager:
                 video_title = self._clean_title(video.get('title', f'Video {idx}'))
                 video_id = video.get('id', '')
 
+                _report_count(idx, video_title)
+
                 if not video_url:
                     self.failed_videos.append({'title': video_title, 'error': 'No URL'})
                     if status_callback:
                         status_callback(f"[{idx}/{self.total_videos}] ⚠️ Skipped: No URL for {video_title}")
+                    _report_count(idx, video_title)
                     continue
 
                 if not video_url.startswith('http'):
@@ -868,6 +895,7 @@ class DownloadManager:
 
                     if result == 0:
                         self.completed_videos += 1
+                        _report_count(idx, video_title)
                         if new_files:
                             actual_downloaded += 1
                             filename = list(new_files)[0]
@@ -914,6 +942,7 @@ class DownloadManager:
                             'error': display_err,
                             'time': datetime.now().strftime('%H:%M:%S'),
                         })
+                        _report_count(idx, video_title)
                         if status_callback:
                             status_callback(f"[{idx}/{self.total_videos}] ❌ FAILED: {video_title} ({display_err})")
 
@@ -933,12 +962,14 @@ class DownloadManager:
                         'error': clean_err,
                         'time': datetime.now().strftime('%H:%M:%S'),
                     })
+                    _report_count(idx, video_title)
                     if status_callback:
                         status_callback(f"[{idx}/{self.total_videos}] ❌ ERROR: {video_title} — {clean_err}")
 
             # Final summary
             if not self.cancel_flag:
                 self.current_progress = 100
+                _report_count(self.total_videos, "All downloads finished")
                 if progress_callback:
                     progress_callback(100)
 

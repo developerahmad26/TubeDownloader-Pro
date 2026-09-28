@@ -211,6 +211,17 @@ class App(ctk.CTk):
         self.schedule_search_var = ctk.StringVar(value="")
         self._schedule_countdown_labels = {}
         self._batch_countdown_labels = {}
+        self.batch_counter_state = {
+            "completed": 0,
+            "total": 0,
+            "current_idx": 0,
+            "current_title": ""
+        }
+        self._active_inline_progress_bar = None
+        self._active_inline_progress_label = None
+        self._active_inline_count_label = None
+        self._active_inline_title_label = None
+        self._active_inline_speed_label = None
 
         self._build_ui()
         self._check_system_deps()
@@ -1258,21 +1269,70 @@ class App(ctk.CTk):
 
             # RUNNING INLINE PROGRESS (If currently downloading)
             if is_running:
-                prog_box = ctk.CTkFrame(card_inner, fg_color="#291804", corner_radius=8, border_width=1, border_color="#d97706")
-                prog_box.pack(fill="x", pady=(4, 6))
+                prog_box = ctk.CTkFrame(card_inner, fg_color="#241403", corner_radius=8, border_width=1.5, border_color="#f59e0b")
+                prog_box.pack(fill="x", pady=(5, 6))
+
                 pb_inner = ctk.CTkFrame(prog_box, fg_color="transparent")
-                pb_inner.pack(fill="x", padx=12, pady=7)
+                pb_inner.pack(fill="both", expand=True, padx=12, pady=9)
 
-                ctk.CTkLabel(pb_inner, text="🚀 Downloading...", font=("Segoe UI", 11, "bold"), text_color="#f59e0b").pack(side="left")
-                run_bar = ctk.CTkProgressBar(pb_inner, height=12)
-                run_bar.pack(side="left", fill="x", expand=True, padx=12)
-                run_bar.set(self.progress_bar.get())
-                self._active_inline_progress_bar = run_bar
+                # Tier 1: Status Left + Live Video Counter Pill + Pct Right
+                t1 = ctk.CTkFrame(pb_inner, fg_color="transparent")
+                t1.pack(fill="x", pady=(0, 6))
 
-                pct_txt = self.progress_percent.cget("text")
-                pct_lbl = ctk.CTkLabel(pb_inner, text=pct_txt, font=("Segoe UI", 11, "bold"), text_color="#f59e0b")
+                ctk.CTkLabel(
+                    t1, text="🚀 ACTIVE DOWNLOAD", font=("Segoe UI", 11, "bold"), text_color="#fbbf24"
+                ).pack(side="left")
+
+                # Center Count Pill: shows completed / total / remaining
+                c_st = getattr(self, "batch_counter_state", {})
+                b_done = c_st.get("completed", 0)
+                b_tot = c_st.get("total", 0)
+                b_rem = max(0, b_tot - b_done)
+                pill_init_txt = f"📊 {b_done}/{b_tot} Completed  ({b_rem} left)" if b_tot > 0 else "📊 Initializing..."
+
+                count_pill = ctk.CTkLabel(
+                    t1, text=pill_init_txt, font=("Segoe UI", 10, "bold"),
+                    text_color="#fde68a", fg_color="#3b1d06", corner_radius=6, padx=10, pady=3
+                )
+                count_pill.pack(side="left", padx=12)
+                self._active_inline_count_label = count_pill
+
+                pct_txt = self.progress_percent.cget("text") if hasattr(self, "progress_percent") else "0.0%"
+                pct_lbl = ctk.CTkLabel(t1, text=pct_txt, font=("Segoe UI", 12, "bold"), text_color="#fbbf24")
                 pct_lbl.pack(side="right")
                 self._active_inline_progress_label = pct_lbl
+
+                # Tier 2: Progress Bar
+                run_bar = ctk.CTkProgressBar(pb_inner, height=14, corner_radius=5, progress_color="#f59e0b")
+                run_bar.pack(fill="x", pady=(0, 6))
+                run_bar.set(self.progress_bar.get() if hasattr(self, "progress_bar") else 0)
+                self._active_inline_progress_bar = run_bar
+
+                # Tier 3: Active Video Title Ticker & Speed/ETA
+                t3 = ctk.CTkFrame(pb_inner, fg_color="transparent")
+                t3.pack(fill="x")
+
+                b_idx = c_st.get("current_idx", 0)
+                b_title = c_st.get("current_title", "")
+                if b_title:
+                    clean_t = b_title if len(b_title) <= 65 else b_title[:62] + "..."
+                    ticker_init = f"▶ Video [{b_idx}/{b_tot}]: {clean_t}" if b_tot > 0 else f"▶ {clean_t}"
+                else:
+                    ticker_init = "▶ Preparing batch queue..."
+
+                title_lbl = ctk.CTkLabel(
+                    t3, text=ticker_init, font=("Segoe UI", 10, "italic"),
+                    text_color="#cbd5e1", anchor="w"
+                )
+                title_lbl.pack(side="left", fill="x", expand=True)
+                self._active_inline_title_label = title_lbl
+
+                speed_lbl = ctk.CTkLabel(
+                    t3, text="", font=("Segoe UI", 10, "bold"),
+                    text_color="#34d399", anchor="e"
+                )
+                speed_lbl.pack(side="right", padx=(8, 0))
+                self._active_inline_speed_label = speed_lbl
 
             # Row 4: Action Buttons Bar
             row4 = ctk.CTkFrame(card_inner, fg_color="transparent")
@@ -1690,21 +1750,70 @@ class App(ctk.CTk):
                 self._schedule_countdown_labels[jid] = (cd_label, run_at)
 
             elif status == "Running":
-                run_banner = ctk.CTkFrame(card_inner, fg_color="#0f2b38", corner_radius=8, border_width=1, border_color="#0284c7")
-                run_banner.pack(fill="x", pady=(4, 6))
+                run_banner = ctk.CTkFrame(card_inner, fg_color="#072233", corner_radius=8, border_width=1.5, border_color="#0284c7")
+                run_banner.pack(fill="x", pady=(5, 6))
 
                 rb_inner = ctk.CTkFrame(run_banner, fg_color="transparent")
-                rb_inner.pack(fill="x", padx=12, pady=7)
+                rb_inner.pack(fill="both", expand=True, padx=12, pady=9)
 
-                ctk.CTkLabel(rb_inner, text="⚡ RUNNING NOW:", font=("Segoe UI", 11, "bold"), text_color="#38bdf8").pack(side="left")
-                sched_prog_bar = ctk.CTkProgressBar(rb_inner, height=12)
-                sched_prog_bar.pack(side="left", fill="x", expand=True, padx=12)
-                sched_prog_bar.set(self.progress_bar.get())
-                self._active_inline_progress_bar = sched_prog_bar
+                # Tier 1: Status Left + Live Video Counter Pill + Pct Right
+                t1 = ctk.CTkFrame(rb_inner, fg_color="transparent")
+                t1.pack(fill="x", pady=(0, 6))
 
-                pct_label = ctk.CTkLabel(rb_inner, text=self.progress_percent.cget("text"), font=("Segoe UI", 11, "bold"), text_color="#38bdf8")
+                ctk.CTkLabel(
+                    t1, text="⚡ RUNNING NOW", font=("Segoe UI", 11, "bold"), text_color="#38bdf8"
+                ).pack(side="left")
+
+                # Center Count Pill: shows completed / total / remaining
+                c_st = getattr(self, "batch_counter_state", {})
+                b_done = c_st.get("completed", 0)
+                b_tot = c_st.get("total", 0)
+                b_rem = max(0, b_tot - b_done)
+                pill_init_txt = f"📊 {b_done}/{b_tot} Completed  ({b_rem} left)" if b_tot > 0 else "📊 Initializing..."
+
+                count_pill = ctk.CTkLabel(
+                    t1, text=pill_init_txt, font=("Segoe UI", 10, "bold"),
+                    text_color="#67e8f9", fg_color="#0b2c3d", corner_radius=6, padx=10, pady=3
+                )
+                count_pill.pack(side="left", padx=12)
+                self._active_inline_count_label = count_pill
+
+                pct_txt = self.progress_percent.cget("text") if hasattr(self, "progress_percent") else "0.0%"
+                pct_label = ctk.CTkLabel(t1, text=pct_txt, font=("Segoe UI", 12, "bold"), text_color="#38bdf8")
                 pct_label.pack(side="right")
                 self._active_inline_progress_label = pct_label
+
+                # Tier 2: Progress Bar
+                sched_prog_bar = ctk.CTkProgressBar(rb_inner, height=14, corner_radius=5, progress_color="#0284c7")
+                sched_prog_bar.pack(fill="x", pady=(0, 6))
+                sched_prog_bar.set(self.progress_bar.get() if hasattr(self, "progress_bar") else 0)
+                self._active_inline_progress_bar = sched_prog_bar
+
+                # Tier 3: Active Video Title Ticker & Speed/ETA
+                t3 = ctk.CTkFrame(rb_inner, fg_color="transparent")
+                t3.pack(fill="x")
+
+                b_idx = c_st.get("current_idx", 0)
+                b_title = c_st.get("current_title", "")
+                if b_title:
+                    clean_t = b_title if len(b_title) <= 65 else b_title[:62] + "..."
+                    ticker_init = f"▶ Video [{b_idx}/{b_tot}]: {clean_t}" if b_tot > 0 else f"▶ {clean_t}"
+                else:
+                    ticker_init = "▶ Preparing task queue..."
+
+                title_lbl = ctk.CTkLabel(
+                    t3, text=ticker_init, font=("Segoe UI", 10, "italic"),
+                    text_color="#cbd5e1", anchor="w"
+                )
+                title_lbl.pack(side="left", fill="x", expand=True)
+                self._active_inline_title_label = title_lbl
+
+                speed_lbl = ctk.CTkLabel(
+                    t3, text="", font=("Segoe UI", 10, "bold"),
+                    text_color="#34d399", anchor="e"
+                )
+                speed_lbl.pack(side="right", padx=(8, 0))
+                self._active_inline_speed_label = speed_lbl
 
             # Row 5: Action Buttons Bar
             row5 = ctk.CTkFrame(card_inner, fg_color="transparent")
@@ -2219,6 +2328,9 @@ class App(ctk.CTk):
             self.current_running_batch_id = None
             self._active_inline_progress_bar = None
             self._active_inline_progress_label = None
+            self._active_inline_count_label = None
+            self._active_inline_title_label = None
+            self._active_inline_speed_label = None
             status = "Completed" if success else "Failed"
             self.batch_manager.mark_status(batch_id, status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             msg = f"Batch '{batch.get('name')}' finished with status: {status}"
@@ -2252,6 +2364,9 @@ class App(ctk.CTk):
             self.current_running_batch_id = None
             self._active_inline_progress_bar = None
             self._active_inline_progress_label = None
+            self._active_inline_count_label = None
+            self._active_inline_title_label = None
+            self._active_inline_speed_label = None
 
             is_repeat = job.get("repeat_daily") or (isinstance(tdata, dict) and tdata.get("repeat_daily"))
             if is_repeat and success:
@@ -2327,6 +2442,7 @@ class App(ctk.CTk):
                         speed_limit=speed,
                         progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
                         status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
+                        video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
                     )
                 else:
                     is_chan = (btype == "channel")
@@ -2358,7 +2474,7 @@ class App(ctk.CTk):
                             selection_value=sel_val,
                             progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
                             status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                            video_count_callback=lambda c: self.after(0, lambda: self._update_counter(c)),
+                            video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
                         )
             except Exception as e:
                 self.after(0, lambda: self._update_status(f"❌ Download Error: {e}"))
@@ -2936,6 +3052,11 @@ class App(ctk.CTk):
                 self.status_label.configure(text=f"⚡ {main_part}")
                 if hasattr(self, "speed_eta_label"):
                     self.speed_eta_label.configure(text=f"🚀 {meta_part}")
+                if hasattr(self, "_active_inline_speed_label") and self._active_inline_speed_label:
+                    try:
+                        self._active_inline_speed_label.configure(text=f"🚀 {meta_part}")
+                    except Exception:
+                        pass
             else:
                 self.status_label.configure(text=text)
                 if hasattr(self, "speed_eta_label"):
@@ -2965,8 +3086,70 @@ class App(ctk.CTk):
         except Exception:
             pass
 
-    def _update_counter(self, total):
-        self.counter_label.configure(text=f"📊 Total: {total} videos")
+    def _update_counter(self, *args):
+        """Update video counters across Downloads Studio, Batches Studio, and Scheduler Studio."""
+        if not args:
+            return
+
+        if len(args) == 1:
+            total = args[0]
+            completed = 0
+            current_idx = 0
+            current_title = ""
+        else:
+            completed = args[0]
+            total = args[1]
+            current_idx = args[2] if len(args) > 2 else 0
+            current_title = args[3] if len(args) > 3 else ""
+
+        self.batch_counter_state = {
+            "completed": completed,
+            "total": total,
+            "current_idx": current_idx,
+            "current_title": current_title
+        }
+
+        # 1. Update Downloads Studio counter badge
+        if hasattr(self, "counter_label") and self.counter_label:
+            try:
+                if total > 0 and (completed > 0 or current_idx > 0):
+                    remaining = max(0, total - completed)
+                    self.counter_label.configure(
+                        text=f"📊 {completed}/{total} Completed ({remaining} left)"
+                    )
+                elif total > 0:
+                    self.counter_label.configure(text=f"📊 Total: {total} videos")
+                else:
+                    self.counter_label.configure(text="")
+            except Exception:
+                pass
+
+        # 2. Update Batches Studio / Scheduler Studio active inline pill
+        if hasattr(self, "_active_inline_count_label") and self._active_inline_count_label:
+            try:
+                if total > 0:
+                    remaining = max(0, total - completed)
+                    self._active_inline_count_label.configure(
+                        text=f"📊 {completed}/{total} Completed  ({remaining} left)"
+                    )
+                else:
+                    self._active_inline_count_label.configure(text="📊 Initializing queue...")
+            except Exception:
+                pass
+
+        # 3. Update active inline current video title ticker
+        if hasattr(self, "_active_inline_title_label") and self._active_inline_title_label:
+            try:
+                if current_title:
+                    clean_t = current_title if len(current_title) <= 65 else current_title[:62] + "..."
+                    if current_idx > 0 and total > 0:
+                        self._active_inline_title_label.configure(text=f"▶ Video [{current_idx}/{total}]: {clean_t}")
+                    else:
+                        self._active_inline_title_label.configure(text=f"▶ {clean_t}")
+                else:
+                    self._active_inline_title_label.configure(text="")
+            except Exception:
+                pass
 
     def _get_current_tab(self):
         current = self.tabview.get()
@@ -3143,6 +3326,7 @@ class App(ctk.CTk):
                 speed_limit=settings['speed_limit'],
                 progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
                 status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
+                video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
             )
             self.after(0, self._reset_buttons)
 
@@ -3208,7 +3392,7 @@ class App(ctk.CTk):
                 selection_value=actual_sel_value,
                 progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
                 status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                video_count_callback=lambda c: self.after(0, lambda: self._update_counter(c)),
+                video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
             )
             self.after(0, self._reset_buttons)
 
@@ -3224,6 +3408,11 @@ class App(ctk.CTk):
         self.cancel_btn.configure(state="disabled")
         if hasattr(self, "speed_eta_label"):
             self.speed_eta_label.configure(text="")
+        if hasattr(self, "_active_inline_speed_label") and self._active_inline_speed_label:
+            try:
+                self._active_inline_speed_label.configure(text="")
+            except Exception:
+                pass
 
 
 def main():
