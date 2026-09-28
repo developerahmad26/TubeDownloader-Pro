@@ -165,10 +165,15 @@ class DownloadManager:
             ydl_opts['js_runtimes'] = {'node': {}}
 
         app_cookie = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-        if os.path.exists(app_cookie):
-            ydl_opts['cookiefile'] = app_cookie
-        elif os.path.exists("cookies.txt"):
-            ydl_opts['cookiefile'] = "cookies.txt"
+        cookie_path = None
+        if os.path.exists(app_cookie) and os.path.getsize(app_cookie) > 10:
+            cookie_path = app_cookie
+        elif os.path.exists("cookies.txt") and os.path.getsize("cookies.txt") > 10:
+            cookie_path = "cookies.txt"
+
+        if cookie_path:
+            ydl_opts['cookiefile'] = cookie_path
+            ydl_opts['extractor_args']['youtube']['player_client'] = ['web', 'android', 'ios']
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -351,10 +356,15 @@ class DownloadManager:
 
         # Auto-detect cookies.txt if present
         app_cookie = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-        if os.path.exists(app_cookie):
-            opts['cookiefile'] = app_cookie
-        elif os.path.exists("cookies.txt"):
-            opts['cookiefile'] = "cookies.txt"
+        cookie_path = None
+        if os.path.exists(app_cookie) and os.path.getsize(app_cookie) > 10:
+            cookie_path = app_cookie
+        elif os.path.exists("cookies.txt") and os.path.getsize("cookies.txt") > 10:
+            cookie_path = "cookies.txt"
+
+        if cookie_path:
+            opts['cookiefile'] = cookie_path
+            opts['extractor_args']['youtube']['player_client'] = ['web', 'android', 'ios']
 
         postprocessors = []
 

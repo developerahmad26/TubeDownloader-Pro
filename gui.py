@@ -1,6 +1,8 @@
 """Modern GUI for YouTube Video Downloader using CustomTkinter."""
 
 import os
+import sys
+import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -264,6 +266,27 @@ class App(ctk.CTk):
             variable=self.subfolder_var
         ).pack(side="left", padx=10)
 
+        # Cookies row (for VPS / Anti-Bot)
+        cookie_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
+        cookie_frame.pack(fill="x", padx=15, pady=(0, 10))
+
+        ctk.CTkButton(
+            cookie_frame,
+            text="🍪 Manage YouTube Cookies",
+            width=210,
+            command=self._open_cookie_manager,
+            fg_color="#1F6AA5",
+            hover_color="#144870"
+        ).pack(side="left", padx=(0, 10))
+
+        self.cookie_status_label = ctk.CTkLabel(
+            cookie_frame,
+            text=self._get_cookie_status_text(),
+            font=("Segoe UI", 11),
+            text_color="#2ECC71" if self._has_cookies() else "#F39C12"
+        )
+        self.cookie_status_label.pack(side="left")
+
         # ========== Download Directory ==========
         dir_frame = ctk.CTkFrame(main_container)
         dir_frame.pack(fill="x", pady=(0, 10))
@@ -516,7 +539,136 @@ class App(ctk.CTk):
     def _open_download_dir(self):
         path = self.dir_var.get()
         os.makedirs(path, exist_ok=True)
-        os.startfile(path)
+        try:
+            if hasattr(os, 'startfile'):
+                os.startfile(path)
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', path])
+            else:
+                subprocess.run(['xdg-open', path])
+        except Exception:
+            pass
+
+    def _get_cookie_file_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+
+    def _has_cookies(self):
+        cookie_path = self._get_cookie_file_path()
+        return os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 10
+
+    def _get_cookie_status_text(self):
+        if self._has_cookies():
+            return "✅ YouTube Cookies Loaded (Bot Bypass Active)"
+        return "⚠️ No Cookies (Recommended for VPS / 403 Bot Errors)"
+
+    def _update_cookie_status_label(self):
+        if hasattr(self, 'cookie_status_label'):
+            if self._has_cookies():
+                self.cookie_status_label.configure(
+                    text="✅ YouTube Cookies Active (Bot Bypass ON)",
+                    text_color="#2ECC71"
+                )
+            else:
+                self.cookie_status_label.configure(
+                    text="⚠️ No Cookies Loaded (Click to Add / Fix 403 & Bot Errors)",
+                    text_color="#F39C12"
+                )
+
+    def _open_cookie_manager(self):
+        top = ctk.CTkToplevel(self)
+        top.title("🍪 YouTube Cookies Manager (Fix Bot & 403 Errors)")
+        top.geometry("640x550")
+        top.transient(self)
+        top.grab_set()
+
+        ctk.CTkLabel(
+            top, text="🍪 YouTube Cookies Manager (VPS / Anti-Bot Fix)",
+            font=("Segoe UI", 16, "bold")
+        ).pack(padx=20, pady=(15, 5))
+
+        info_msg = (
+            "YouTube datacenter / VPS IP addresses ko automated bot samajh kar block karta hai.\n"
+            "Apne browser ke YouTube cookies import karne se ye error 100% permanently solve ho jata hai!\n\n"
+            "Kaise Karein:\n"
+            "1. Apne computer ke Chrome browser me 'Get cookies.txt LOCALLY' extension install karein.\n"
+            "2. youtube.com open karein aur extension se cookies Copy ya Export karein.\n"
+            "3. Yahan niche box me paste karein ya file Browse karein, aur 'Save Cookies' dabayein."
+        )
+        ctk.CTkLabel(
+            top, text=info_msg, font=("Segoe UI", 11),
+            text_color="#cccccc", justify="left", wraplength=600
+        ).pack(padx=20, pady=(0, 10))
+
+        text_box = ctk.CTkTextbox(top, width=600, height=220, font=("Consolas", 11))
+        text_box.pack(padx=20, pady=5)
+
+        cookie_path = self._get_cookie_file_path()
+        if os.path.exists(cookie_path):
+            try:
+                with open(cookie_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    text_box.insert("1.0", content)
+            except Exception:
+                pass
+
+        btn_frame = ctk.CTkFrame(top, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=15)
+
+        def browse_file():
+            fn = filedialog.askopenfilename(
+                title="Select cookies.txt file",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if fn:
+                try:
+                    with open(fn, "r", encoding="utf-8", errors="ignore") as f:
+                        data = f.read()
+                    text_box.delete("1.0", "end")
+                    text_box.insert("1.0", data)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to read file: {e}")
+
+        def save_cookies():
+            content = text_box.get("1.0", "end").strip()
+            if not content:
+                messagebox.showwarning("Warning", "Please paste cookies or browse a file first.")
+                return
+            try:
+                with open(cookie_path, "w", encoding="utf-8") as f:
+                    f.write(content + "\n")
+                self._update_cookie_status_label()
+                messagebox.showinfo("Success", "✅ Cookies successfully saved! Bot protection bypassed.")
+                top.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save cookies: {e}")
+
+        def clear_cookies():
+            if os.path.exists(cookie_path):
+                try:
+                    os.remove(cookie_path)
+                except Exception:
+                    pass
+            text_box.delete("1.0", "end")
+            self._update_cookie_status_label()
+            messagebox.showinfo("Cleared", "Cookies have been cleared.")
+
+        ctk.CTkButton(
+            btn_frame, text="📁 Browse File", width=120, command=browse_file
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            btn_frame, text="💾 Save Cookies", width=140, fg_color="#2ECC71",
+            hover_color="#27AE60", command=save_cookies
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            btn_frame, text="🗑️ Clear", width=100, fg_color="#E74C3C",
+            hover_color="#C0392B", command=clear_cookies
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            btn_frame, text="Close", width=90, command=top.destroy
+        ).pack(side="right", padx=5)
 
     def _log(self, message):
         self.log_text.configure(state="normal")
