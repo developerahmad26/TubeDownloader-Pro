@@ -213,8 +213,8 @@ class DownloadScheduler:
                         j for j in jobs if j.get("status") == "Pending"
                     ]
 
-                    # Find any job whose time has arrived
-                    job_to_run = None
+                    # Find all jobs whose time has arrived
+                    jobs_to_run = []
                     for job in pending:
                         run_at_str = job.get("run_at", "")
                         try:
@@ -223,13 +223,11 @@ class DownloadScheduler:
                             continue
 
                         if now >= target:
-                            job_to_run = job
-                            break
+                            jobs_to_run.append(job)
 
-                if job_to_run:
-                    # Double check engine availability right before trigger
+                for job_to_run in jobs_to_run:
                     if self.is_engine_busy():
-                        continue
+                        break
 
                     # Trigger this job safely
                     self.mark_status(job_to_run["id"], "Running", f"Started at {now.strftime('%H:%M:%S')}")

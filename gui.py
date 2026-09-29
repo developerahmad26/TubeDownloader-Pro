@@ -197,9 +197,12 @@ class App(ctk.CTk):
 
         self.dm = DownloadManager()
         self.batch_manager = BatchManager()
+        self.active_tasks = {}  # task_id -> task dict for multi-task concurrent downloads
+        self._batch_cards_widgets = {}     # bid -> {progress_bar, progress_label, count_label, title_label, speed_label}
+        self._schedule_cards_widgets = {}  # jid -> {progress_bar, progress_label, count_label, title_label, speed_label}
         self.scheduler = DownloadScheduler(
             runner_callback=self._run_scheduled_job,
-            is_busy_check=lambda: bool(self.dm.is_downloading)
+            is_busy_check=lambda: len(self.active_tasks) >= 10
         )
         self.fetched_videos = []
         self.fetched_playlist_title = ""
@@ -1029,13 +1032,14 @@ class App(ctk.CTk):
             widget.destroy()
 
         self._batch_countdown_labels.clear()
+        self._batch_cards_widgets.clear()
 
         all_batches = self.batch_manager.get_all()
         total_count = len(all_batches)
 
         # Count states including active schedules
         sched_count = sum(1 for b in all_batches if self._get_active_schedule_for_batch(b.get("id")) is not None)
-        running_count = sum(1 for b in all_batches if self.current_running_batch_id == b.get("id") or b.get("status") == "Running")
+        running_count = sum(1 for b in all_batches if b.get("id") in self.active_tasks or b.get("status") == "Running")
         comp_count = sum(1 for b in all_batches if b.get("status") == "Completed" and not self._get_active_schedule_for_batch(b.get("id")))
         ready_count = total_count - sched_count - running_count - comp_count
         if ready_count < 0:
@@ -1053,7 +1057,7 @@ class App(ctk.CTk):
         filtered = []
         for b in all_batches:
             active_sched = self._get_active_schedule_for_batch(b.get("id"))
-            is_running = (self.current_running_batch_id == b.get("id") or b.get("status") == "Running")
+            is_running = (b.get("id") in self.active_tasks or b.get("status") == "Running")
             is_comp = (b.get("status") == "Completed" and not active_sched)
 
             if selected_filter == "All Batches":
@@ -1116,7 +1120,7 @@ class App(ctk.CTk):
 
             # Check if this batch is currently scheduled
             active_sched = self._get_active_schedule_for_batch(bid)
-            is_running = (self.current_running_batch_id == bid or b.get("status") == "Running")
+            is_running = (bid in self.active_tasks or b.get("status") == "Running")
             is_comp = (b.get("status") == "Completed" and not active_sched)
 
             # Determine Card Border & Background Theme based on State
@@ -1284,7 +1288,8 @@ class App(ctk.CTk):
                 ).pack(side="left")
 
                 # Center Count Pill: shows completed / total / remaining
-                c_st = getattr(self, "batch_counter_state", {})
+                task_info = self._get_active_task(bid) or {}
+                c_st = task_info.get("counter_state", {})
                 b_done = c_st.get("completed", 0)
                 b_tot = c_st.get("total", 0)
                 b_rem = max(0, b_tot - b_done)
@@ -1295,18 +1300,15 @@ class App(ctk.CTk):
                     text_color="#fde68a", fg_color="#3b1d06", corner_radius=6, padx=10, pady=3
                 )
                 count_pill.pack(side="left", padx=12)
-                self._active_inline_count_label = count_pill
 
-                pct_txt = self.progress_percent.cget("text") if hasattr(self, "progress_percent") else "0.0%"
+                pct_txt = task_info.get("percent_str", "0.0%")
                 pct_lbl = ctk.CTkLabel(t1, text=pct_txt, font=("Segoe UI", 12, "bold"), text_color="#fbbf24")
                 pct_lbl.pack(side="right")
-                self._active_inline_progress_label = pct_lbl
 
                 # Tier 2: Progress Bar
                 run_bar = ctk.CTkProgressBar(pb_inner, height=14, corner_radius=5, progress_color="#f59e0b")
                 run_bar.pack(fill="x", pady=(0, 6))
-                run_bar.set(self.progress_bar.get() if hasattr(self, "progress_bar") else 0)
-                self._active_inline_progress_bar = run_bar
+                run_bar.set(task_info.get("progress", 0.0))
 
                 # Tier 3: Active Video Title Ticker & Speed/ETA
                 t3 = ctk.CTkFrame(pb_inner, fg_color="transparent")
@@ -1325,14 +1327,20 @@ class App(ctk.CTk):
                     text_color="#cbd5e1", anchor="w"
                 )
                 title_lbl.pack(side="left", fill="x", expand=True)
-                self._active_inline_title_label = title_lbl
 
                 speed_lbl = ctk.CTkLabel(
-                    t3, text="", font=("Segoe UI", 10, "bold"),
+                    t3, text=task_info.get("speed_eta_str", ""), font=("Segoe UI", 10, "bold"),
                     text_color="#34d399", anchor="e"
                 )
                 speed_lbl.pack(side="right", padx=(8, 0))
-                self._active_inline_speed_label = speed_lbl
+
+                self._batch_cards_widgets[bid] = {
+                    "progress_bar": run_bar,
+                    "progress_label": pct_lbl,
+                    "count_label": count_pill,
+                    "title_label": title_lbl,
+                    "speed_label": speed_lbl,
+                }
 
             # Row 4: Action Buttons Bar
             row4 = ctk.CTkFrame(card_inner, fg_color="transparent")
@@ -1346,7 +1354,7 @@ class App(ctk.CTk):
                     btn_box_left, text="⏹️ Stop / Cancel", width=120, height=32,
                     fg_color="#991b1b", hover_color="#dc2626", text_color="#fef2f2",
                     font=("Segoe UI", 11, "bold"), corner_radius=6,
-                    command=self._cancel_download
+                    command=lambda bid_val=bid: self._cancel_task(bid_val)
                 ).pack(side="left", padx=(0, 6))
             else:
                 ctk.CTkButton(
@@ -1402,6 +1410,8 @@ class App(ctk.CTk):
 
     def _delete_batch(self, batch_id):
         if messagebox.askyesno("Delete Batch", "Are you sure you want to delete this batch?"):
+            if self._get_active_task(batch_id):
+                self._cancel_task(batch_id)
             self.batch_manager.delete(batch_id)
             self._render_batches_list()
             self._update_status("Batch deleted.")
@@ -1551,6 +1561,7 @@ class App(ctk.CTk):
             widget.destroy()
 
         self._schedule_countdown_labels.clear()
+        self._schedule_cards_widgets.clear()
 
         jobs = self.scheduler.get_all()
         total_count = len(jobs)
@@ -1614,23 +1625,25 @@ class App(ctk.CTk):
             jtype = job.get("job_type", "direct")
             tdata = job.get("target_data", {})
             repeat_daily = job.get("repeat_daily", False)
-            countdown = self.scheduler.get_countdown(run_at) if status == "Pending" else status
+            task_info = self._get_active_task(jid) or {}
+            is_running = (jid in self.active_tasks or status == "Running")
+            countdown = self.scheduler.get_countdown(run_at) if (status == "Pending" and not is_running) else ("Running" if is_running else status)
 
             # Status styling
-            if status == "Pending":
-                card_bg = "#191226"
-                card_border = "#8b5cf6"
-                border_w = 2
-                status_text = "● PENDING"
-                st_color = "#fcd34d"
-                st_bg = "#451a03"
-            elif status == "Running":
+            if is_running:
                 card_bg = "#0f1c29"
                 card_border = "#0284c7"
                 border_w = 2
                 status_text = "⚡ RUNNING"
                 st_color = "#38bdf8"
                 st_bg = "#0c2738"
+            elif status == "Pending":
+                card_bg = "#191226"
+                card_border = "#8b5cf6"
+                border_w = 2
+                status_text = "● PENDING"
+                st_color = "#fcd34d"
+                st_bg = "#451a03"
             elif status == "Completed":
                 card_bg = "#0f1916"
                 card_border = "#059669"
@@ -1749,7 +1762,7 @@ class App(ctk.CTk):
                 cd_label.pack(side="left", padx=12)
                 self._schedule_countdown_labels[jid] = (cd_label, run_at)
 
-            elif status == "Running":
+            elif is_running:
                 run_banner = ctk.CTkFrame(card_inner, fg_color="#072233", corner_radius=8, border_width=1.5, border_color="#0284c7")
                 run_banner.pack(fill="x", pady=(5, 6))
 
@@ -1765,7 +1778,7 @@ class App(ctk.CTk):
                 ).pack(side="left")
 
                 # Center Count Pill: shows completed / total / remaining
-                c_st = getattr(self, "batch_counter_state", {})
+                c_st = task_info.get("counter_state", {})
                 b_done = c_st.get("completed", 0)
                 b_tot = c_st.get("total", 0)
                 b_rem = max(0, b_tot - b_done)
@@ -1776,18 +1789,15 @@ class App(ctk.CTk):
                     text_color="#67e8f9", fg_color="#0b2c3d", corner_radius=6, padx=10, pady=3
                 )
                 count_pill.pack(side="left", padx=12)
-                self._active_inline_count_label = count_pill
 
-                pct_txt = self.progress_percent.cget("text") if hasattr(self, "progress_percent") else "0.0%"
+                pct_txt = task_info.get("percent_str", "0.0%")
                 pct_label = ctk.CTkLabel(t1, text=pct_txt, font=("Segoe UI", 12, "bold"), text_color="#38bdf8")
                 pct_label.pack(side="right")
-                self._active_inline_progress_label = pct_label
 
                 # Tier 2: Progress Bar
                 sched_prog_bar = ctk.CTkProgressBar(rb_inner, height=14, corner_radius=5, progress_color="#0284c7")
                 sched_prog_bar.pack(fill="x", pady=(0, 6))
-                sched_prog_bar.set(self.progress_bar.get() if hasattr(self, "progress_bar") else 0)
-                self._active_inline_progress_bar = sched_prog_bar
+                sched_prog_bar.set(task_info.get("progress", 0.0))
 
                 # Tier 3: Active Video Title Ticker & Speed/ETA
                 t3 = ctk.CTkFrame(rb_inner, fg_color="transparent")
@@ -1806,14 +1816,20 @@ class App(ctk.CTk):
                     text_color="#cbd5e1", anchor="w"
                 )
                 title_lbl.pack(side="left", fill="x", expand=True)
-                self._active_inline_title_label = title_lbl
 
                 speed_lbl = ctk.CTkLabel(
-                    t3, text="", font=("Segoe UI", 10, "bold"),
+                    t3, text=task_info.get("speed_eta_str", ""), font=("Segoe UI", 10, "bold"),
                     text_color="#34d399", anchor="e"
                 )
                 speed_lbl.pack(side="right", padx=(8, 0))
-                self._active_inline_speed_label = speed_lbl
+
+                self._schedule_cards_widgets[jid] = {
+                    "progress_bar": sched_prog_bar,
+                    "progress_label": pct_label,
+                    "count_label": count_pill,
+                    "title_label": title_lbl,
+                    "speed_label": speed_lbl,
+                }
 
             # Row 5: Action Buttons Bar
             row5 = ctk.CTkFrame(card_inner, fg_color="transparent")
@@ -1822,7 +1838,14 @@ class App(ctk.CTk):
             btn_box_left = ctk.CTkFrame(row5, fg_color="transparent")
             btn_box_left.pack(side="left")
 
-            if status == "Pending":
+            if is_running:
+                ctk.CTkButton(
+                    btn_box_left, text="⏹️ Stop / Cancel", width=120, height=32,
+                    fg_color="#991b1b", hover_color="#dc2626", text_color="#fef2f2",
+                    font=("Segoe UI", 11, "bold"), corner_radius=6,
+                    command=lambda jid_val=jid: self._cancel_task(jid_val)
+                ).pack(side="left", padx=(0, 6))
+            elif status == "Pending":
                 ctk.CTkButton(
                     btn_box_left, text="▶️ Run Now", width=105, height=32,
                     fg_color="#059669", hover_color="#10b981", font=("Segoe UI", 11, "bold"),
@@ -1835,14 +1858,6 @@ class App(ctk.CTk):
                     corner_radius=6, command=lambda jid_val=jid: self._cancel_schedule(jid_val)
                 ).pack(side="left")
 
-            elif status == "Running":
-                ctk.CTkButton(
-                    btn_box_left, text="⏹️ Stop / Cancel", width=120, height=32,
-                    fg_color="#991b1b", hover_color="#dc2626", text_color="#fef2f2",
-                    font=("Segoe UI", 11, "bold"), corner_radius=6,
-                    command=self._cancel_download
-                ).pack(side="left", padx=(0, 6))
-
             ctk.CTkButton(
                 row5, text="🗑️ Delete", width=80, height=32,
                 fg_color="#450a0a", hover_color="#991b1b", text_color="#fca5a5", font=("Segoe UI", 11, "bold"),
@@ -1851,16 +1866,21 @@ class App(ctk.CTk):
 
     def _delete_schedule(self, job_id):
         if messagebox.askyesno("Delete Schedule", "Delete this scheduled download task?"):
+            if self._get_active_task(job_id):
+                self._cancel_task(job_id)
             self.scheduler.delete(job_id)
             self._render_schedules_list()
             self._render_batches_list()
             self._update_status("Schedule deleted.")
 
     def _cancel_schedule(self, job_id):
-        self.scheduler.cancel(job_id)
-        self._render_schedules_list()
-        self._render_batches_list()
-        self._update_status("Schedule cancelled.")
+        if self._get_active_task(job_id):
+            self._cancel_task(job_id)
+        else:
+            self.scheduler.cancel(job_id)
+            self._render_schedules_list()
+            self._render_batches_list()
+            self._update_status("Schedule cancelled.")
 
     def _clear_inactive_schedules(self):
         jobs = self.scheduler.get_all()
@@ -2225,11 +2245,15 @@ class App(ctk.CTk):
             # Live update Batches Studio Hero Queue Status
             if hasattr(self, "batches_ticker_label") and hasattr(self, "batch_manager"):
                 all_b = self.batch_manager.get_all()
-                running_b = [b for b in all_b if self.current_running_batch_id == b.get("id") or b.get("status") == "Running"]
-                if running_b:
+                running_b = [b for b in all_b if b.get("id") in self.active_tasks or b.get("status") == "Running"]
+                if len(running_b) == 1:
                     bname = running_b[0].get("name", "Batch")
                     self.batches_ticker_label.configure(
                         text=f"🚀 RUNNING: '{bname}'", text_color="#fcd34d"
+                    )
+                elif len(running_b) > 1:
+                    self.batches_ticker_label.configure(
+                        text=f"🚀 RUNNING: {len(running_b)} Batches in Parallel!", text_color="#fcd34d"
                     )
                 else:
                     sched_b = sum(1 for b in all_b if self._get_active_schedule_for_batch(b.get("id")) is not None)
@@ -2250,10 +2274,10 @@ class App(ctk.CTk):
 
             # Live update Downloads Studio Hero Engine Status
             if hasattr(self, "engine_ticker_label"):
-                if self.dm.is_downloading:
-                    pct = self.progress_percent.cget("text") if hasattr(self, "progress_percent") else ""
+                active_count = len(self.active_tasks)
+                if active_count > 0:
                     self.engine_ticker_label.configure(
-                        text=f"🚀 DOWNLOADING ({pct})", text_color="#38bdf8"
+                        text=f"🚀 {active_count} ACTIVE DOWNLOAD(S) IN PARALLEL", text_color="#38bdf8"
                     )
                 else:
                     self.engine_ticker_label.configure(
@@ -2307,10 +2331,251 @@ class App(ctk.CTk):
             "speed_limit": settings.get("speed_limit", None),
         }
 
+    def _get_active_task(self, key):
+        """Retrieve active task dict by task_id or schedule_id."""
+        if not key:
+            return None
+        if key in self.active_tasks:
+            return self.active_tasks[key]
+        for tid, tinfo in self.active_tasks.items():
+            if tinfo.get("schedule_id") == key:
+                return tinfo
+        return None
+
+    def _cancel_task(self, task_key):
+        """Selectively stop/cancel an individual running download without affecting others."""
+        task = self._get_active_task(task_key)
+        if not task:
+            # Check if it was a pending scheduled job
+            if hasattr(self, "scheduler"):
+                job = self.scheduler.get(task_key)
+                if job and job.get("status") == "Pending":
+                    self._cancel_schedule(task_key)
+                    return
+            self._update_status(f"⚠️ Task '{task_key}' is not currently running.")
+            return
+
+        dm = task.get("dm")
+        tdir = task.get("download_dir")
+        tname = task.get("name", "Task")
+        tid = task.get("id")
+        sid = task.get("schedule_id")
+
+        if dm and dm.is_downloading:
+            dm.cancel(target_dir=tdir)
+            self._update_status(f"🛑 Cancelling '{tname}' & sweeping temporary files...", force_log=True)
+
+            # Update batch card if exists
+            bid = tid if task.get("type") == "batch" else None
+            if bid and bid in self._batch_cards_widgets:
+                bw = self._batch_cards_widgets[bid]
+                try:
+                    if "count_label" in bw:
+                        bw["count_label"].configure(text="🛑 Cancelling...")
+                    if "title_label" in bw:
+                        bw["title_label"].configure(text="▶ Cancelling active video...")
+                except Exception:
+                    pass
+
+            # Update schedule card if exists
+            sched_k = sid or (tid if task.get("type") == "schedule" else None)
+            if sched_k and sched_k in self._schedule_cards_widgets:
+                sw = self._schedule_cards_widgets[sched_k]
+                try:
+                    if "count_label" in sw:
+                        sw["count_label"].configure(text="🛑 Cancelling...")
+                    if "title_label" in sw:
+                        sw["title_label"].configure(text="▶ Cancelling active video...")
+                except Exception:
+                    pass
+
+            # Update manual UI if manual
+            if task.get("type") == "manual":
+                if hasattr(self, "counter_label") and self.counter_label:
+                    try:
+                        self.counter_label.configure(text="🛑 Cancelling...")
+                    except Exception:
+                        pass
+
+    def _on_task_progress(self, task_id, percent):
+        """Update live progress bar and percentage for the specific task and card."""
+        task = self._get_active_task(task_id)
+        if not task:
+            return
+        val = max(0.0, min(100.0, float(percent)))
+        task["progress"] = val / 100.0
+        task["percent_str"] = f"{val:.1f}%"
+
+        # Update Downloads Studio widgets if manual
+        if task.get("type") == "manual":
+            try:
+                self.progress_bar.set(task["progress"])
+                self.progress_percent.configure(text=task["percent_str"])
+            except Exception:
+                pass
+
+        # Update batch card widget
+        bid = task_id if task.get("type") == "batch" else None
+        if bid and bid in self._batch_cards_widgets:
+            bw = self._batch_cards_widgets[bid]
+            try:
+                if "progress_bar" in bw:
+                    bw["progress_bar"].set(task["progress"])
+                if "progress_label" in bw:
+                    bw["progress_label"].configure(text=task["percent_str"])
+            except Exception:
+                pass
+
+        # Update schedule card widget
+        sid = task.get("schedule_id") or (task_id if task.get("type") == "schedule" else None)
+        if sid and sid in self._schedule_cards_widgets:
+            sw = self._schedule_cards_widgets[sid]
+            try:
+                if "progress_bar" in sw:
+                    sw["progress_bar"].set(task["progress"])
+                if "progress_label" in sw:
+                    sw["progress_label"].configure(text=task["percent_str"])
+            except Exception:
+                pass
+
+    def _on_task_status(self, task_id, text, force_log=False):
+        """Handle download status, ETA, and speed ticks dispatched per task."""
+        if not text:
+            return
+        task = self._get_active_task(task_id)
+        is_progress_tick = (" | " in text and ("MB/s" in text or "KB/s" in text or "ETA:" in text))
+
+        speed_eta = ""
+        main_part = text
+        if is_progress_tick:
+            parts = text.split(" | ")
+            main_part = parts[0].strip()
+            meta_part = "  •  ".join(p.strip() for p in parts[1:])
+            speed_eta = f"🚀 {meta_part}"
+
+        if task:
+            task["speed_eta_str"] = speed_eta
+            task["status_text"] = main_part
+
+        # Manual Downloads Studio UI
+        if not task or task.get("type") == "manual":
+            if hasattr(self, "status_label"):
+                try:
+                    if is_progress_tick:
+                        self.status_label.configure(text=f"⚡ {main_part}")
+                        if hasattr(self, "speed_eta_label"):
+                            self.speed_eta_label.configure(text=speed_eta)
+                    else:
+                        self.status_label.configure(text=text)
+                        if hasattr(self, "speed_eta_label"):
+                            self.speed_eta_label.configure(text="")
+                except Exception:
+                    pass
+
+        # Batch card UI
+        bid = task_id if (task and task.get("type") == "batch") else None
+        if bid and bid in self._batch_cards_widgets:
+            bw = self._batch_cards_widgets[bid]
+            try:
+                if "speed_label" in bw:
+                    bw["speed_label"].configure(text=speed_eta)
+            except Exception:
+                pass
+
+        # Schedule card UI
+        sid = (task.get("schedule_id") if task else None) or (task_id if (task and task.get("type") == "schedule") else None)
+        if sid and sid in self._schedule_cards_widgets:
+            sw = self._schedule_cards_widgets[sid]
+            try:
+                if "speed_label" in sw:
+                    sw["speed_label"].configure(text=speed_eta)
+            except Exception:
+                pass
+
+        # Log milestones
+        if force_log or not is_progress_tick:
+            self._log(text)
+            if bid:
+                self._batch_log(text)
+
+    def _on_task_counter(self, task_id, *args):
+        """Update live completed/total counter and active video title pill per task."""
+        if not args:
+            return
+        if len(args) == 1:
+            total = args[0]
+            completed = 0
+            current_idx = 0
+            current_title = ""
+        else:
+            completed = args[0]
+            total = args[1]
+            current_idx = args[2] if len(args) > 2 else 0
+            current_title = args[3] if len(args) > 3 else ""
+
+        task = self._get_active_task(task_id)
+        if task:
+            task["counter_state"] = {
+                "completed": completed,
+                "total": total,
+                "current_idx": current_idx,
+                "current_title": current_title
+            }
+
+        remaining = max(0, total - completed)
+        if total > 0 and (completed > 0 or current_idx > 0):
+            count_txt = f"📊 {completed}/{total} Completed  ({remaining} left)"
+        elif total > 0:
+            count_txt = f"📊 Total: {total} videos"
+        else:
+            count_txt = "📊 Initializing queue..."
+
+        clean_t = current_title if len(current_title) <= 65 else current_title[:62] + "..."
+        if current_title:
+            title_txt = f"▶ Video [{current_idx}/{total}]: {clean_t}" if total > 0 else f"▶ {clean_t}"
+        else:
+            title_txt = ""
+
+        # Update Downloads Studio if manual
+        if not task or task.get("type") == "manual":
+            if hasattr(self, "counter_label") and self.counter_label:
+                try:
+                    self.counter_label.configure(text=count_txt if total > 0 else "")
+                except Exception:
+                    pass
+
+        # Update batch card
+        bid = task_id if (task and task.get("type") == "batch") else None
+        if bid and bid in self._batch_cards_widgets:
+            bw = self._batch_cards_widgets[bid]
+            try:
+                if "count_label" in bw:
+                    bw["count_label"].configure(text=count_txt)
+                if "title_label" in bw and title_txt:
+                    bw["title_label"].configure(text=title_txt)
+            except Exception:
+                pass
+
+        # Update schedule card
+        sid = (task.get("schedule_id") if task else None) or (task_id if (task and task.get("type") == "schedule") else None)
+        if sid and sid in self._schedule_cards_widgets:
+            sw = self._schedule_cards_widgets[sid]
+            try:
+                if "count_label" in sw:
+                    sw["count_label"].configure(text=count_txt)
+                if "title_label" in sw and title_txt:
+                    sw["title_label"].configure(text=title_txt)
+            except Exception:
+                pass
+
     def _run_batch(self, batch):
-        """Run a saved batch immediately."""
-        if self.dm.is_downloading:
-            messagebox.showwarning("Warning", "A download is already running! Please wait for it to complete.")
+        """Run a saved batch immediately (concurrent with any other tasks)."""
+        batch_id = batch.get("id")
+        if not batch_id:
+            return
+
+        if self._get_active_task(batch_id):
+            messagebox.showwarning("Warning", f"Batch '{batch.get('name')}' is already running!")
             return
 
         url = batch.get("url")
@@ -2318,39 +2583,32 @@ class App(ctk.CTk):
             messagebox.showerror("Error", "Batch has no URL!")
             return
 
-        batch_id = batch["id"]
-        self.current_running_batch_id = batch_id
         self.batch_manager.mark_status(batch_id, "Running", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         self._render_batches_list()
-        self._update_status(f"🚀 Starting batch: '{batch.get('name')}'")
+        self._update_status(f"🚀 Starting batch: '{batch.get('name')}'", force_log=True)
 
         def done_callback(success):
-            self.current_running_batch_id = None
-            self._active_inline_progress_bar = None
-            self._active_inline_progress_label = None
-            self._active_inline_count_label = None
-            self._active_inline_title_label = None
-            self._active_inline_speed_label = None
             status = "Completed" if success else "Failed"
             self.batch_manager.mark_status(batch_id, status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             msg = f"Batch '{batch.get('name')}' finished with status: {status}"
-            self.after(0, lambda: self._update_status(msg))
+            self.after(0, lambda: self._update_status(msg, force_log=True))
             self.after(0, self._render_batches_list)
             self.after(0, self._render_schedules_list)
 
-        self._execute_package_download(batch, on_complete=done_callback)
+        self._execute_task_download(task_id=batch_id, pkg=batch, task_type="batch", on_complete=done_callback)
 
     def _run_scheduled_job(self, job):
         """Called automatically by DownloadScheduler when scheduled time arrives or user clicks Run Now."""
         job_id = job.get("id")
         job_name = job.get("name", "Scheduled Task")
-        msg = f"⏰ Scheduler triggered: '{job_name}'!"
 
-        # 1. Immediately mark Running in persistent scheduler storage
+        if self._get_active_task(job_id):
+            return
+
+        msg = f"⏰ Scheduler triggered: '{job_name}'!"
         self.scheduler.mark_status(job_id, "Running", f"Started at {datetime.now().strftime('%H:%M:%S')}")
 
-        # 2. Immediately re-render both studios so cards transition to 'RUNNING' with amber/sky glow
-        self.after(0, lambda: self._update_status(msg))
+        self.after(0, lambda: self._update_status(msg, force_log=True))
         self.after(0, self._render_schedules_list)
         self.after(0, self._render_batches_list)
 
@@ -2361,18 +2619,12 @@ class App(ctk.CTk):
             st = "Completed" if success else "Failed"
             finish_msg = f"Finished at {datetime.now().strftime('%H:%M:%S')}"
             self.scheduler.mark_status(job_id, st, finish_msg)
-            self.current_running_batch_id = None
-            self._active_inline_progress_bar = None
-            self._active_inline_progress_label = None
-            self._active_inline_count_label = None
-            self._active_inline_title_label = None
-            self._active_inline_speed_label = None
 
             is_repeat = job.get("repeat_daily") or (isinstance(tdata, dict) and tdata.get("repeat_daily"))
             if is_repeat and success:
-                self.after(0, lambda: self._update_status(f"🔁 Job '{job_name}' completed & rescheduled for tomorrow!"))
+                self.after(0, lambda: self._update_status(f"🔁 Job '{job_name}' completed & rescheduled for tomorrow!", force_log=True))
             else:
-                self.after(0, lambda: self._update_status(f"✅ Job '{job_name}' finished: {st}"))
+                self.after(0, lambda: self._update_status(f"✅ Job '{job_name}' finished: {st}", force_log=True))
 
             self.after(0, self._render_schedules_list)
             self.after(0, self._render_batches_list)
@@ -2383,17 +2635,21 @@ class App(ctk.CTk):
             pkg_to_run = saved_batch if saved_batch else tdata
             if pkg_to_run and pkg_to_run.get("url"):
                 if bid:
-                    self.current_running_batch_id = bid
                     self.batch_manager.mark_status(bid, "Running", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                     self.after(0, self._render_batches_list)
-                self.after(0, lambda: self._execute_package_download(pkg_to_run, on_complete=done_callback))
+                task_id = bid if bid else job_id
+                self.after(0, lambda: self._execute_task_download(
+                    task_id=task_id, pkg=pkg_to_run, task_type="batch", schedule_id=job_id, on_complete=done_callback
+                ))
             else:
                 done_callback(False)
         else:
-            self.after(0, lambda: self._execute_package_download(tdata, on_complete=done_callback))
+            self.after(0, lambda: self._execute_task_download(
+                task_id=job_id, pkg=tdata, task_type="schedule", schedule_id=job_id, on_complete=done_callback
+            ))
 
-    def _execute_package_download(self, pkg, on_complete=None):
-        """Execute a download package (single or batch) on a background thread safely."""
+    def _execute_task_download(self, task_id, pkg, task_type="batch", schedule_id=None, on_complete=None):
+        """Execute a download package (single, playlist, channel) on an isolated DownloadManager background thread."""
         btype = pkg.get("type", "single")
         url = pkg.get("url", "")
         naming = pkg.get("naming_scheme", "title")
@@ -2417,19 +2673,42 @@ class App(ctk.CTk):
         if sel_mode in SELECTION_MODES:
             sel_mode = SELECTION_MODES[sel_mode]
 
-        self.dm.reset()
-        self.progress_bar.set(0)
-        self.progress_percent.configure(text="0.0%")
-        if hasattr(self, "speed_eta_label"):
-            self.speed_eta_label.configure(text="")
-        self.download_btn.configure(state="disabled")
-        self.cancel_btn.configure(state="normal")
+        # Use self.dm for manual Downloads Studio; instantiate fresh isolated DownloadManager for batches & schedules
+        dm = self.dm if task_type == "manual" else DownloadManager()
+        dm.reset()
+
+        self.active_tasks[task_id] = {
+            "id": task_id,
+            "schedule_id": schedule_id,
+            "dm": dm,
+            "type": task_type,
+            "name": pkg.get("name", "Download Task"),
+            "download_dir": download_dir,
+            "progress": 0.0,
+            "percent_str": "0.0%",
+            "speed_eta_str": "",
+            "counter_state": {
+                "completed": 0,
+                "total": 0,
+                "current_idx": 0,
+                "current_title": ""
+            },
+            "status_text": "Starting...",
+        }
+
+        if task_type == "manual":
+            self.progress_bar.set(0)
+            self.progress_percent.configure(text="0.0%")
+            if hasattr(self, "speed_eta_label"):
+                self.speed_eta_label.configure(text="")
+            self.download_btn.configure(state="disabled")
+            self.cancel_btn.configure(state="normal")
 
         def worker():
             success = False
             try:
                 if btype == "single":
-                    success = self.dm.download_single(
+                    success = dm.download_single(
                         url=url,
                         quality=quality,
                         naming_scheme=naming,
@@ -2440,25 +2719,30 @@ class App(ctk.CTk):
                         subtitle_lang=sub_lang,
                         output_format=fmt,
                         speed_limit=speed,
-                        progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
-                        status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                        video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
+                        progress_callback=lambda p: self.after(0, lambda: self._on_task_progress(task_id, p)),
+                        status_callback=lambda s: self.after(0, lambda: self._on_task_status(task_id, s)),
+                        video_count_callback=lambda *c: self.after(0, lambda: self._on_task_counter(task_id, *c)),
                     )
                 else:
-                    is_chan = (btype == "channel")
-                    self.after(0, lambda: self._update_status(f"🔍 Fetching {btype} video list..."))
-                    result = self.dm.get_video_list(
-                        url,
-                        callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                        is_channel=is_chan
-                    )
-                    if not result or len(result) != 3 or not result[0]:
-                        self.after(0, lambda: self._update_status(f"❌ Failed to fetch {btype} videos."))
-                        success = False
+                    if "videos" in pkg and pkg["videos"]:
+                        videos = pkg["videos"]
+                        pl_title = pkg.get("name", "")
+                        actual_subfolder = subfolder or pl_title
                     else:
+                        is_chan = (btype == "channel")
+                        self.after(0, lambda: self._on_task_status(task_id, f"🔍 Fetching {btype} video list...", force_log=True))
+                        result = dm.get_video_list(
+                            url,
+                            callback=lambda s: self.after(0, lambda: self._on_task_status(task_id, s)),
+                            is_channel=is_chan
+                        )
+                        if not result or len(result) != 3 or not result[0]:
+                            self.after(0, lambda: self._on_task_status(task_id, f"❌ Failed to fetch {btype} videos.", force_log=True))
+                            success = False
+                            return
                         videos, pl_title, _ = result
                         actual_subfolder = subfolder or pl_title
-                        success = self.dm.download_batch(
+                        success = dm.download_batch(
                             videos=videos,
                             quality=quality,
                             naming_scheme=naming,
@@ -2472,19 +2756,28 @@ class App(ctk.CTk):
                             speed_limit=speed,
                             selection_mode=sel_mode,
                             selection_value=sel_val,
-                            progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
-                            status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                            video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
+                            progress_callback=lambda p: self.after(0, lambda: self._on_task_progress(task_id, p)),
+                            status_callback=lambda s: self.after(0, lambda: self._on_task_status(task_id, s)),
+                            video_count_callback=lambda *c: self.after(0, lambda: self._on_task_counter(task_id, *c)),
                         )
             except Exception as e:
-                self.after(0, lambda: self._update_status(f"❌ Download Error: {e}"))
+                self.after(0, lambda: self._on_task_status(task_id, f"❌ Download Error: {e}", force_log=True))
                 success = False
             finally:
-                self.after(0, self._reset_buttons)
+                if task_id in self.active_tasks:
+                    del self.active_tasks[task_id]
+
+                if task_type == "manual":
+                    self.after(0, self._reset_buttons)
+
                 if on_complete:
                     on_complete(success)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _execute_package_download(self, pkg, on_complete=None):
+        """Backward-compatibility wrapper executing package as a task."""
+        self._execute_task_download(task_id="manual", pkg=pkg, task_type="manual", on_complete=on_complete)
 
     def _preview_batch_videos(self, batch_item):
         """Fetch and preview video list from a batch in a popup dialog."""
@@ -3032,124 +3325,23 @@ class App(ctk.CTk):
         ).pack(side="right", padx=5)
 
     def _log(self, message):
-        self.log_text.configure(state="normal")
-        self.log_text.insert("end", message + "\n")
-        self.log_text.see("end")
-        self.log_text.configure(state="disabled")
+        if hasattr(self, "log_text") and self.log_text:
+            try:
+                self.log_text.configure(state="normal")
+                self.log_text.insert("end", message + "\n")
+                self.log_text.see("end")
+                self.log_text.configure(state="disabled")
+            except Exception:
+                pass
 
     def _update_status(self, text, force_log=False):
-        if not text:
-            return
-
-        # Check if text is a high-frequency download progress tick
-        is_progress_tick = (" | " in text and ("MB/s" in text or "KB/s" in text or "ETA:" in text))
-
-        if hasattr(self, "status_label"):
-            if is_progress_tick:
-                parts = text.split(" | ")
-                main_part = parts[0].strip()
-                meta_part = "  •  ".join(p.strip() for p in parts[1:])
-                self.status_label.configure(text=f"⚡ {main_part}")
-                if hasattr(self, "speed_eta_label"):
-                    self.speed_eta_label.configure(text=f"🚀 {meta_part}")
-                if hasattr(self, "_active_inline_speed_label") and self._active_inline_speed_label:
-                    try:
-                        self._active_inline_speed_label.configure(text=f"🚀 {meta_part}")
-                    except Exception:
-                        pass
-            else:
-                self.status_label.configure(text=text)
-                if hasattr(self, "speed_eta_label"):
-                    self.speed_eta_label.configure(text="")
-
-        # Only write to log textboxes if it's a real milestone or forced log, NOT high-frequency speed ticks
-        if force_log or not is_progress_tick:
-            self._log(text)
-            if getattr(self, "current_running_batch_id", None):
-                self._batch_log(text)
+        self._on_task_status("manual", text, force_log=force_log)
 
     def _update_progress(self, percent):
-        try:
-            val = max(0.0, min(100.0, float(percent)))
-            self.progress_bar.set(val / 100.0)
-            self.progress_percent.configure(text=f"{val:.1f}%")
-            if hasattr(self, "_active_inline_progress_bar") and self._active_inline_progress_bar:
-                try:
-                    self._active_inline_progress_bar.set(val / 100.0)
-                except Exception:
-                    pass
-            if hasattr(self, "_active_inline_progress_label") and self._active_inline_progress_label:
-                try:
-                    self._active_inline_progress_label.configure(text=f"{val:.1f}%")
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        self._on_task_progress("manual", percent)
 
     def _update_counter(self, *args):
-        """Update video counters across Downloads Studio, Batches Studio, and Scheduler Studio."""
-        if not args:
-            return
-
-        if len(args) == 1:
-            total = args[0]
-            completed = 0
-            current_idx = 0
-            current_title = ""
-        else:
-            completed = args[0]
-            total = args[1]
-            current_idx = args[2] if len(args) > 2 else 0
-            current_title = args[3] if len(args) > 3 else ""
-
-        self.batch_counter_state = {
-            "completed": completed,
-            "total": total,
-            "current_idx": current_idx,
-            "current_title": current_title
-        }
-
-        # 1. Update Downloads Studio counter badge
-        if hasattr(self, "counter_label") and self.counter_label:
-            try:
-                if total > 0 and (completed > 0 or current_idx > 0):
-                    remaining = max(0, total - completed)
-                    self.counter_label.configure(
-                        text=f"📊 {completed}/{total} Completed ({remaining} left)"
-                    )
-                elif total > 0:
-                    self.counter_label.configure(text=f"📊 Total: {total} videos")
-                else:
-                    self.counter_label.configure(text="")
-            except Exception:
-                pass
-
-        # 2. Update Batches Studio / Scheduler Studio active inline pill
-        if hasattr(self, "_active_inline_count_label") and self._active_inline_count_label:
-            try:
-                if total > 0:
-                    remaining = max(0, total - completed)
-                    self._active_inline_count_label.configure(
-                        text=f"📊 {completed}/{total} Completed  ({remaining} left)"
-                    )
-                else:
-                    self._active_inline_count_label.configure(text="📊 Initializing queue...")
-            except Exception:
-                pass
-
-        # 3. Update active inline current video title ticker
-        if hasattr(self, "_active_inline_title_label") and self._active_inline_title_label:
-            try:
-                if current_title:
-                    clean_t = current_title if len(current_title) <= 65 else current_title[:62] + "..."
-                    if current_idx > 0 and total > 0:
-                        self._active_inline_title_label.configure(text=f"▶ Video [{current_idx}/{total}]: {clean_t}")
-                    else:
-                        self._active_inline_title_label.configure(text=f"▶ {clean_t}")
-                else:
-                    self._active_inline_title_label.configure(text="")
-            except Exception:
-                pass
+        self._on_task_counter("manual", *args)
 
     def _get_current_tab(self):
         current = self.tabview.get()
@@ -3284,19 +3476,13 @@ class App(ctk.CTk):
     # ==================== Download ====================
 
     def _start_download(self):
-        if self.dm.is_downloading:
-            messagebox.showwarning("Warning", "A download is already in progress!")
+        manual_task = self._get_active_task("manual")
+        if manual_task and manual_task.get("dm") and manual_task["dm"].is_downloading:
+            messagebox.showwarning("Warning", "A manual download is already running in Downloads Studio! Please wait or use Batches Studio for parallel downloads.")
             return
 
         tab = self._get_current_tab()
         settings = self._get_common_settings()
-
-        # Reset
-        self.dm.reset()
-        self.progress_bar.set(0)
-        self.progress_percent.configure(text="0%")
-        self.download_btn.configure(state="disabled")
-        self.cancel_btn.configure(state="normal")
 
         if tab == "single":
             self._download_single(settings)
@@ -3312,107 +3498,64 @@ class App(ctk.CTk):
             self._reset_buttons()
             return
 
-        def download():
-            self.dm.download_single(
-                url=url,
-                quality=settings['quality'],
-                naming_scheme=settings['naming_scheme'],
-                custom_prefix=settings['custom_prefix'],
-                download_dir=settings['download_dir'],
-                embed_thumbnail=settings['embed_thumbnail'],
-                download_subtitles=settings['download_subtitles'],
-                subtitle_lang=settings['subtitle_lang'],
-                output_format=settings['output_format'],
-                speed_limit=settings['speed_limit'],
-                progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
-                status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
-            )
-            self.after(0, self._reset_buttons)
-
-        threading.Thread(target=download, daemon=True).start()
+        pkg = {
+            "name": "Single Video",
+            "type": "single",
+            "url": url,
+            "quality": settings['quality'],
+            "naming_scheme": settings['naming_scheme'],
+            "custom_prefix": settings['custom_prefix'],
+            "download_dir": settings['download_dir'],
+            "embed_thumbnail": settings['embed_thumbnail'],
+            "download_subtitles": settings['download_subtitles'],
+            "subtitle_lang": settings['subtitle_lang'],
+            "output_format": settings['output_format'],
+            "speed_limit": settings['speed_limit'],
+        }
+        self._execute_task_download(task_id="manual", pkg=pkg, task_type="manual")
 
     def _download_batch(self, settings, mode):
         if mode == "playlist":
             url = self.playlist_url_entry.get().strip()
             sel_mode = SELECTION_MODES[self.playlist_sel_var.get()]
             sel_value = self.playlist_sel_value.get().strip()
+            title = self.fetched_playlist_title or "Playlist Download"
         else:
             url = self.channel_url_entry.get().strip()
             sel_mode = SELECTION_MODES[self.channel_sel_var.get()]
             sel_value = self.channel_sel_value.get().strip()
+            title = self.fetched_playlist_title or "Channel Download"
 
         if not url:
             messagebox.showwarning("Warning", f"Please enter a {mode} URL!")
             self._reset_buttons()
             return
 
-        def download():
-            if self.fetched_videos:
-                videos = self.fetched_videos
-                playlist_title = self.fetched_playlist_title
-                actual_sel_mode = sel_mode
-                actual_sel_value = sel_value
-            else:
-                self.after(
-                    0,
-                    lambda: self._update_status(f"🔍 Fetching {mode} info...")
-                )
-                result = self.dm.get_video_list(
-                    url,
-                    callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                    is_channel=(mode == "channel")
-                )
-                if not result or len(result) != 3:
-                    self.after(
-                        0,
-                        lambda: self._update_status(f"❌ Failed to fetch {mode}.")
-                    )
-                    self.after(0, self._reset_buttons)
-                    return
-                videos, playlist_title, _ = result
-                actual_sel_mode = sel_mode
-                actual_sel_value = sel_value
+        subfolder = title if settings['create_subfolder'] else ""
+        pkg = {
+            "name": title,
+            "type": mode,
+            "url": url,
+            "quality": settings['quality'],
+            "naming_scheme": settings['naming_scheme'],
+            "custom_prefix": settings['custom_prefix'],
+            "download_dir": settings['download_dir'],
+            "subfolder": subfolder,
+            "embed_thumbnail": settings['embed_thumbnail'],
+            "download_subtitles": settings['download_subtitles'],
+            "subtitle_lang": settings['subtitle_lang'],
+            "output_format": settings['output_format'],
+            "speed_limit": settings['speed_limit'],
+            "selection_mode": sel_mode,
+            "selection_value": sel_value,
+        }
+        if self.fetched_videos:
+            pkg["videos"] = self.fetched_videos
 
-            subfolder = playlist_title if settings['create_subfolder'] else ""
-
-            self.dm.download_batch(
-                videos=videos,
-                quality=settings['quality'],
-                naming_scheme=settings['naming_scheme'],
-                custom_prefix=settings['custom_prefix'],
-                download_dir=settings['download_dir'],
-                subfolder=subfolder,
-                embed_thumbnail=settings['embed_thumbnail'],
-                download_subtitles=settings['download_subtitles'],
-                subtitle_lang=settings['subtitle_lang'],
-                output_format=settings['output_format'],
-                speed_limit=settings['speed_limit'],
-                selection_mode=actual_sel_mode,
-                selection_value=actual_sel_value,
-                progress_callback=lambda p: self.after(0, lambda: self._update_progress(p)),
-                status_callback=lambda s: self.after(0, lambda: self._update_status(s)),
-                video_count_callback=lambda *c: self.after(0, lambda: self._update_counter(*c)),
-            )
-            self.after(0, self._reset_buttons)
-
-        threading.Thread(target=download, daemon=True).start()
+        self._execute_task_download(task_id="manual", pkg=pkg, task_type="manual")
 
     def _cancel_download(self):
-        if self.dm.is_downloading:
-            cur_dir = self.dir_var.get() if hasattr(self, "dir_var") else None
-            self.dm.cancel(target_dir=cur_dir)
-            self._update_status("⚠️ Cancelling download & sweeping temporary files...")
-            if hasattr(self, "_active_inline_count_label") and self._active_inline_count_label:
-                try:
-                    self._active_inline_count_label.configure(text="🛑 Cancelling...")
-                except Exception:
-                    pass
-            if hasattr(self, "_active_inline_title_label") and self._active_inline_title_label:
-                try:
-                    self._active_inline_title_label.configure(text="▶ Cancelling active video...")
-                except Exception:
-                    pass
+        self._cancel_task("manual")
 
     def _reset_buttons(self):
         self.download_btn.configure(state="normal")
