@@ -119,6 +119,12 @@ class BatchManager:
                 "last_run": None,
                 "status": "Ready",
                 "total_items": opts.get("total_items", 0),
+                "completed_items": opts.get("completed_items", 0),
+                "failed_items": opts.get("failed_items", 0),
+                "skipped_items": opts.get("skipped_items", 0),
+                "summary": opts.get("summary", ""),
+                "save_path": opts.get("save_path", ""),
+                "videos": opts.get("videos", []),
             }
             batches.insert(0, batch)  # Newest first
             self.save_all(batches)
@@ -141,9 +147,21 @@ class BatchManager:
             batches = [b for b in self.get_all() if b.get("id") != batch_id]
             return self.save_all(batches)
 
-    def mark_status(self, batch_id, status, last_run=None):
-        """Update status of a batch safely."""
+    def mark_status(self, batch_id, status, last_run=None, summary=None, completed_items=None, total_items=None, failed_items=None, skipped_items=None, save_path=None):
+        """Update status and tracking metrics of a batch safely."""
         updates = {"status": status}
-        if last_run:
+        if last_run is not None:
             updates["last_run"] = last_run
+        if summary is not None:
+            updates["summary"] = summary
+        if completed_items is not None:
+            updates["completed_items"] = completed_items
+        if total_items is not None:
+            updates["total_items"] = total_items
+        if failed_items is not None:
+            updates["failed_items"] = failed_items
+        if skipped_items is not None:
+            updates["skipped_items"] = skipped_items
+        if save_path is not None:
+            updates["save_path"] = save_path
         return self.update(batch_id, updates)

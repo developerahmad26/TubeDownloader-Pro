@@ -1138,6 +1138,20 @@ class App(ctk.CTk):
                 status_text = "⏰ SCHEDULED"
                 st_color = "#d8b4fe"
                 st_bg = "#3b1d5c"
+            elif b.get("status") == "Failed":
+                card_bg = "#1f1012"
+                card_border = "#ef4444"
+                border_w = 1.5
+                status_text = "❌ FAILED"
+                st_color = "#fca5a5"
+                st_bg = "#450a0a"
+            elif b.get("status") == "Completed (Errors)":
+                card_bg = "#1f170a"
+                card_border = "#f59e0b"
+                border_w = 1.5
+                status_text = "⚠️ COMPLETED (ERRORS)"
+                st_color = "#fde68a"
+                st_bg = "#451a03"
             elif is_comp:
                 card_bg = "#0c1d18"
                 card_border = "#059669"
@@ -1341,6 +1355,72 @@ class App(ctk.CTk):
                     "title_label": title_lbl,
                     "speed_label": speed_lbl,
                 }
+
+            # COMPLETED / FAILED METRICS BANNER
+            if b.get("status") in ("Completed", "Completed (Errors)", "Failed") and not is_running and not active_sched:
+                c_status = b.get("status")
+                c_done = b.get("completed_items", 0)
+                c_tot = b.get("total_items", 0)
+                c_fail = b.get("failed_items", 0)
+                c_skip = b.get("skipped_items", 0)
+                c_summary = b.get("summary", "")
+                c_path = b.get("save_path") or b.get("download_dir", "")
+
+                is_fail = (c_status == "Failed")
+                is_warn = (c_status == "Completed (Errors)")
+
+                banner_bg = "#260e12" if is_fail else ("#261908" if is_warn else "#092218")
+                banner_border = "#ef4444" if is_fail else ("#f59e0b" if is_warn else "#10b981")
+                accent_color = "#f87171" if is_fail else ("#fbbf24" if is_warn else "#34d399")
+
+                comp_banner = ctk.CTkFrame(card_inner, fg_color=banner_bg, corner_radius=8, border_width=1.5, border_color=banner_border)
+                comp_banner.pack(fill="x", pady=(5, 6))
+
+                cb_inner = ctk.CTkFrame(comp_banner, fg_color="transparent")
+                cb_inner.pack(fill="both", expand=True, padx=12, pady=9)
+
+                # Row 1: Header + Timestamp
+                cb_r1 = ctk.CTkFrame(cb_inner, fg_color="transparent")
+                cb_r1.pack(fill="x")
+
+                icon_txt = "❌ RUN FAILED" if is_fail else ("⚠️ COMPLETED WITH ISSUES" if is_warn else "🎉 DOWNLOAD COMPLETED")
+                ctk.CTkLabel(cb_r1, text=icon_txt, font=("Segoe UI", 11, "bold"), text_color=accent_color).pack(side="left")
+
+                if last_run:
+                    ctk.CTkLabel(cb_r1, text=f"🕒 Finished: {last_run}", font=("Segoe UI", 10), text_color="#94a3b8").pack(side="right")
+
+                # Row 2: Metrics Chips Row
+                cb_r2 = ctk.CTkFrame(cb_inner, fg_color="transparent")
+                cb_r2.pack(fill="x", pady=(6, 4))
+
+                def _add_batch_stat_pill(parent, label, value, bg, fg):
+                    pill = ctk.CTkFrame(parent, fg_color=bg, corner_radius=6)
+                    pill.pack(side="left", padx=(0, 6))
+                    ctk.CTkLabel(pill, text=f"{label}: {value}", font=("Segoe UI", 10, "bold"), text_color=fg).pack(padx=8, pady=2)
+
+                if c_tot > 0 or c_done > 0:
+                    _add_batch_stat_pill(cb_r2, "📊 Total Videos", c_tot if c_tot > 0 else (c_done + c_fail), "#1e293b", "#e2e8f0")
+                    _add_batch_stat_pill(cb_r2, "✅ Downloaded", c_done, "#064e3b", "#6ee7b7")
+                    if c_skip > 0:
+                        _add_batch_stat_pill(cb_r2, "⚡ Already Existed", c_skip, "#1e3a5f", "#7dd3fc")
+                    if c_fail > 0:
+                        _add_batch_stat_pill(cb_r2, "⚠️ Failed", c_fail, "#450a0a", "#fca5a5")
+                elif c_summary:
+                    _add_batch_stat_pill(cb_r2, "📋 Result", c_summary, "#1e293b", "#e2e8f0")
+
+                if c_summary and (c_tot > 0 or c_done > 0):
+                    ctk.CTkLabel(cb_inner, text=f"💬 {c_summary}", font=("Segoe UI", 10, "italic"), text_color="#cbd5e1", anchor="w").pack(fill="x", pady=(2, 2))
+
+                # Row 3: Destination Folder with "Open Folder" button
+                if c_path:
+                    cb_r3 = ctk.CTkFrame(cb_inner, fg_color="transparent")
+                    cb_r3.pack(fill="x", pady=(4, 0))
+                    ctk.CTkLabel(cb_r3, text=f"📁 {c_path}", font=("Segoe UI", 10), text_color="#94a3b8", anchor="w").pack(side="left", fill="x", expand=True)
+                    ctk.CTkButton(
+                        cb_r3, text="📂 Open Folder", width=95, height=22,
+                        fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"),
+                        corner_radius=4, command=lambda p=c_path: self._open_folder(p)
+                    ).pack(side="right")
 
             # Row 4: Action Buttons Bar
             row4 = ctk.CTkFrame(card_inner, fg_color="transparent")
@@ -1647,10 +1727,24 @@ class App(ctk.CTk):
             elif status == "Completed":
                 card_bg = "#0f1916"
                 card_border = "#059669"
-                border_w = 1
+                border_w = 1.5
                 status_text = "✅ COMPLETED"
                 st_color = "#6ee7b7"
                 st_bg = "#064e3b"
+            elif status == "Completed (Errors)":
+                card_bg = "#1f170a"
+                card_border = "#f59e0b"
+                border_w = 1.5
+                status_text = "⚠️ COMPLETED (ERRORS)"
+                st_color = "#fde68a"
+                st_bg = "#451a03"
+            elif status == "Failed":
+                card_bg = "#1f1012"
+                card_border = "#ef4444"
+                border_w = 1.5
+                status_text = "❌ FAILED"
+                st_color = "#fca5a5"
+                st_bg = "#450a0a"
             else:
                 card_bg = "#1f1214"
                 card_border = "#dc2626"
@@ -1830,6 +1924,65 @@ class App(ctk.CTk):
                     "title_label": title_lbl,
                     "speed_label": speed_lbl,
                 }
+
+            elif status in ("Completed", "Completed (Errors)", "Failed"):
+                c_done = job.get("completed_items", 0)
+                c_tot = job.get("total_items", 0)
+                c_fail = job.get("failed_items", 0)
+                c_skip = job.get("skipped_items", 0)
+                c_summary = job.get("summary") or job.get("log", "")
+                c_path = job.get("save_path") or (tdata.get("download_dir", "") if isinstance(tdata, dict) else "")
+
+                is_fail = (status == "Failed")
+                is_warn = (status == "Completed (Errors)")
+
+                banner_bg = "#260e12" if is_fail else ("#261908" if is_warn else "#092218")
+                banner_border = "#ef4444" if is_fail else ("#f59e0b" if is_warn else "#10b981")
+                accent_color = "#f87171" if is_fail else ("#fbbf24" if is_warn else "#34d399")
+
+                comp_banner = ctk.CTkFrame(card_inner, fg_color=banner_bg, corner_radius=8, border_width=1.5, border_color=banner_border)
+                comp_banner.pack(fill="x", pady=(5, 6))
+
+                cb_inner = ctk.CTkFrame(comp_banner, fg_color="transparent")
+                cb_inner.pack(fill="both", expand=True, padx=12, pady=9)
+
+                cb_r1 = ctk.CTkFrame(cb_inner, fg_color="transparent")
+                cb_r1.pack(fill="x")
+
+                icon_txt = "❌ EXECUTION FAILED" if is_fail else ("⚠️ COMPLETED WITH ISSUES" if is_warn else "🎉 JOB EXECUTED SUCCESSFULLY")
+                ctk.CTkLabel(cb_r1, text=icon_txt, font=("Segoe UI", 11, "bold"), text_color=accent_color).pack(side="left")
+
+                # Metrics Chips
+                cb_r2 = ctk.CTkFrame(cb_inner, fg_color="transparent")
+                cb_r2.pack(fill="x", pady=(6, 4))
+
+                def _add_stat_pill_sched(parent, label, value, bg, fg):
+                    pill = ctk.CTkFrame(parent, fg_color=bg, corner_radius=6)
+                    pill.pack(side="left", padx=(0, 6))
+                    ctk.CTkLabel(pill, text=f"{label}: {value}", font=("Segoe UI", 10, "bold"), text_color=fg).pack(padx=8, pady=2)
+
+                if c_tot > 0 or c_done > 0:
+                    _add_stat_pill_sched(cb_r2, "📊 Total Videos", c_tot if c_tot > 0 else (c_done + c_fail), "#1e293b", "#e2e8f0")
+                    _add_stat_pill_sched(cb_r2, "✅ Downloaded", c_done, "#064e3b", "#6ee7b7")
+                    if c_skip > 0:
+                        _add_stat_pill_sched(cb_r2, "⚡ Already Existed", c_skip, "#1e3a5f", "#7dd3fc")
+                    if c_fail > 0:
+                        _add_stat_pill_sched(cb_r2, "⚠️ Failed", c_fail, "#450a0a", "#fca5a5")
+                elif c_summary:
+                    _add_stat_pill_sched(cb_r2, "📋 Result", c_summary, "#1e293b", "#e2e8f0")
+
+                if c_summary and (c_tot > 0 or c_done > 0):
+                    ctk.CTkLabel(cb_inner, text=f"💬 {c_summary}", font=("Segoe UI", 10, "italic"), text_color="#cbd5e1", anchor="w").pack(fill="x", pady=(2, 2))
+
+                if c_path:
+                    cb_r3 = ctk.CTkFrame(cb_inner, fg_color="transparent")
+                    cb_r3.pack(fill="x", pady=(4, 0))
+                    ctk.CTkLabel(cb_r3, text=f"📁 {c_path}", font=("Segoe UI", 10), text_color="#94a3b8", anchor="w").pack(side="left", fill="x", expand=True)
+                    ctk.CTkButton(
+                        cb_r3, text="📂 Open Folder", width=95, height=22,
+                        fg_color="#1e293b", hover_color="#334155", font=("Segoe UI", 10, "bold"),
+                        corner_radius=4, command=lambda p=c_path: self._open_folder(p)
+                    ).pack(side="right")
 
             # Row 5: Action Buttons Bar
             row5 = ctk.CTkFrame(card_inner, fg_color="transparent")
@@ -2284,6 +2437,58 @@ class App(ctk.CTk):
                         text="🟢 IDLE & READY", text_color="#00f0ff"
                     )
 
+            # Periodic live sync for active task cards in visible views
+            if self.active_tasks:
+                for tid, tinfo in list(self.active_tasks.items()):
+                    bid = tid if tinfo.get("type") == "batch" else None
+                    sid = tinfo.get("schedule_id") or (tid if tinfo.get("type") == "schedule" else None)
+                    c_st = tinfo.get("counter_state", {})
+                    b_done = c_st.get("completed", 0)
+                    b_tot = c_st.get("total", 0)
+                    b_rem = max(0, b_tot - b_done)
+                    count_txt = f"📊 {b_done}/{b_tot} Completed  ({b_rem} left)" if b_tot > 0 else "📊 Initializing..."
+
+                    b_idx = c_st.get("current_idx", 0)
+                    b_title = c_st.get("current_title", "")
+                    clean_t = b_title if len(b_title) <= 65 else b_title[:62] + "..."
+                    title_txt = f"▶ Video [{b_idx}/{b_tot}]: {clean_t}" if b_tot > 0 else (f"▶ {clean_t}" if b_title else "")
+
+                    pct = tinfo.get("progress", 0.0)
+                    pct_str = tinfo.get("percent_str", "0.0%")
+                    speed_str = tinfo.get("speed_eta_str", "")
+
+                    if bid and bid in self._batch_cards_widgets:
+                        bw = self._batch_cards_widgets[bid]
+                        try:
+                            if "progress_bar" in bw:
+                                bw["progress_bar"].set(pct)
+                            if "progress_label" in bw:
+                                bw["progress_label"].configure(text=pct_str)
+                            if "count_label" in bw:
+                                bw["count_label"].configure(text=count_txt)
+                            if "title_label" in bw and title_txt:
+                                bw["title_label"].configure(text=title_txt)
+                            if "speed_label" in bw:
+                                bw["speed_label"].configure(text=speed_str)
+                        except Exception:
+                            pass
+
+                    if sid and sid in self._schedule_cards_widgets:
+                        sw = self._schedule_cards_widgets[sid]
+                        try:
+                            if "progress_bar" in sw:
+                                sw["progress_bar"].set(pct)
+                            if "progress_label" in sw:
+                                sw["progress_label"].configure(text=pct_str)
+                            if "count_label" in sw:
+                                sw["count_label"].configure(text=count_txt)
+                            if "title_label" in sw and title_txt:
+                                sw["title_label"].configure(text=title_txt)
+                            if "speed_label" in sw:
+                                sw["speed_label"].configure(text=speed_str)
+                        except Exception:
+                            pass
+
             if self.current_nav_view == "downloads":
                 self._refresh_downloads_kpis()
         except Exception:
@@ -2313,7 +2518,7 @@ class App(ctk.CTk):
             sel_mode = SELECTION_MODES.get(self.channel_sel_var.get(), "all")
             sel_val = self.channel_sel_value.get().strip()
 
-        return {
+        pkg = {
             "name": name,
             "type": tab,
             "url": url,
@@ -2330,6 +2535,12 @@ class App(ctk.CTk):
             "subtitle_lang": settings.get("subtitle_lang", "en"),
             "speed_limit": settings.get("speed_limit", None),
         }
+        if tab in ("playlist", "channel") and self.fetched_videos:
+            pkg["videos"] = list(self.fetched_videos)
+            pkg["total_items"] = len(self.fetched_videos)
+        elif tab == "single" and url:
+            pkg["total_items"] = 1
+        return pkg
 
     def _get_active_task(self, key):
         """Retrieve active task dict by task_id or schedule_id."""
@@ -2587,9 +2798,33 @@ class App(ctk.CTk):
         self._render_batches_list()
         self._update_status(f"🚀 Starting batch: '{batch.get('name')}'", force_log=True)
 
-        def done_callback(success):
-            status = "Completed" if success else "Failed"
-            self.batch_manager.mark_status(batch_id, status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        def done_callback(success, stats=None):
+            stats = stats or {}
+            c_done = stats.get("completed", 0)
+            t_tot = stats.get("total", 0)
+            f_fail = stats.get("failed", 0)
+            s_skip = stats.get("skipped", 0)
+            dest = stats.get("destination", batch.get("download_dir", ""))
+            summary = stats.get("summary", "")
+
+            if f_fail > 0 and c_done > 0:
+                status = "Completed (Errors)"
+            elif success:
+                status = "Completed"
+            else:
+                status = "Failed"
+
+            self.batch_manager.mark_status(
+                batch_id=batch_id,
+                status=status,
+                last_run=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                summary=summary,
+                completed_items=c_done,
+                total_items=t_tot,
+                failed_items=f_fail,
+                skipped_items=s_skip,
+                save_path=dest,
+            )
             msg = f"Batch '{batch.get('name')}' finished with status: {status}"
             self.after(0, lambda: self._update_status(msg, force_log=True))
             self.after(0, self._render_batches_list)
@@ -2615,10 +2850,37 @@ class App(ctk.CTk):
         jtype = job.get("job_type", "direct")
         tdata = job.get("target_data", {})
 
-        def done_callback(success):
-            st = "Completed" if success else "Failed"
+        def done_callback(success, stats=None):
+            stats = stats or {}
+            c_done = stats.get("completed", 0)
+            t_tot = stats.get("total", 0)
+            f_fail = stats.get("failed", 0)
+            s_skip = stats.get("skipped", 0)
+            dest = stats.get("destination", "")
+            summary = stats.get("summary", "")
+
+            if f_fail > 0 and c_done > 0:
+                st = "Completed (Errors)"
+            elif success:
+                st = "Completed"
+            else:
+                st = "Failed"
+
             finish_msg = f"Finished at {datetime.now().strftime('%H:%M:%S')}"
-            self.scheduler.mark_status(job_id, st, finish_msg)
+            if summary:
+                finish_msg += f" — {summary}"
+
+            self.scheduler.mark_status(
+                job_id=job_id,
+                status=st,
+                log_msg=finish_msg,
+                summary=summary,
+                completed_items=c_done,
+                total_items=t_tot,
+                failed_items=f_fail,
+                skipped_items=s_skip,
+                save_path=dest,
+            )
 
             is_repeat = job.get("repeat_daily") or (isinstance(tdata, dict) and tdata.get("repeat_daily"))
             if is_repeat and success:
@@ -2689,7 +2951,7 @@ class App(ctk.CTk):
             "speed_eta_str": "",
             "counter_state": {
                 "completed": 0,
-                "total": 0,
+                "total": pkg.get("total_items", 0),
                 "current_idx": 0,
                 "current_title": ""
             },
@@ -2706,9 +2968,17 @@ class App(ctk.CTk):
 
         def worker():
             success = False
+            stats = {
+                "completed": 0,
+                "total": 0,
+                "failed": 0,
+                "skipped": 0,
+                "destination": download_dir,
+                "summary": "",
+            }
             try:
                 if btype == "single":
-                    success = dm.download_single(
+                    res = dm.download_single(
                         url=url,
                         quality=quality,
                         naming_scheme=naming,
@@ -2723,6 +2993,13 @@ class App(ctk.CTk):
                         status_callback=lambda s: self.after(0, lambda: self._on_task_status(task_id, s)),
                         video_count_callback=lambda *c: self.after(0, lambda: self._on_task_counter(task_id, *c)),
                     )
+                    success = bool(res)
+                    stats["completed"] = dm.completed_videos
+                    stats["total"] = max(1, dm.total_videos)
+                    stats["failed"] = len(dm.failed_videos)
+                    stats["skipped"] = len(dm.skipped_videos)
+                    stats["destination"] = download_dir
+                    stats["summary"] = "1 video downloaded successfully" if success else (dm.failed_videos[0]["error"] if dm.failed_videos else "Download failed")
                 else:
                     if "videos" in pkg and pkg["videos"]:
                         videos = pkg["videos"]
@@ -2739,30 +3016,66 @@ class App(ctk.CTk):
                         if not result or len(result) != 3 or not result[0]:
                             self.after(0, lambda: self._on_task_status(task_id, f"❌ Failed to fetch {btype} videos.", force_log=True))
                             success = False
+                            stats["summary"] = f"Failed to fetch {btype} videos"
                             return
                         videos, pl_title, _ = result
                         actual_subfolder = subfolder or pl_title
-                        success = dm.download_batch(
-                            videos=videos,
-                            quality=quality,
-                            naming_scheme=naming,
-                            custom_prefix=custom_prefix,
-                            download_dir=download_dir,
-                            subfolder=actual_subfolder,
-                            embed_thumbnail=embed_thumb,
-                            download_subtitles=subtitles,
-                            subtitle_lang=sub_lang,
-                            output_format=fmt,
-                            speed_limit=speed,
-                            selection_mode=sel_mode,
-                            selection_value=sel_val,
-                            progress_callback=lambda p: self.after(0, lambda: self._on_task_progress(task_id, p)),
-                            status_callback=lambda s: self.after(0, lambda: self._on_task_status(task_id, s)),
-                            video_count_callback=lambda *c: self.after(0, lambda: self._on_task_counter(task_id, *c)),
-                        )
+
+                    # Update total items count in task counter and persistent record as soon as list is fetched
+                    if videos:
+                        self.after(0, lambda v_count=len(videos): self._on_task_counter(task_id, 0, v_count, 0, f"Found {v_count} videos"))
+
+                    # Execute download_batch for all batch items
+                    dm.download_batch(
+                        videos=videos,
+                        quality=quality,
+                        naming_scheme=naming,
+                        custom_prefix=custom_prefix,
+                        download_dir=download_dir,
+                        subfolder=actual_subfolder,
+                        embed_thumbnail=embed_thumb,
+                        download_subtitles=subtitles,
+                        subtitle_lang=sub_lang,
+                        output_format=fmt,
+                        speed_limit=speed,
+                        selection_mode=sel_mode,
+                        selection_value=sel_val,
+                        progress_callback=lambda p: self.after(0, lambda: self._on_task_progress(task_id, p)),
+                        status_callback=lambda s: self.after(0, lambda: self._on_task_status(task_id, s)),
+                        video_count_callback=lambda *c: self.after(0, lambda: self._on_task_counter(task_id, *c)),
+                    )
+
+                    c_videos = dm.completed_videos
+                    f_videos = len(dm.failed_videos)
+                    s_videos = len(dm.skipped_videos)
+                    t_videos = dm.total_videos if dm.total_videos > 0 else len(videos)
+                    dest_path = os.path.join(download_dir, actual_subfolder) if actual_subfolder else download_dir
+
+                    stats["completed"] = c_videos
+                    stats["total"] = t_videos
+                    stats["failed"] = f_videos
+                    stats["skipped"] = s_videos
+                    stats["destination"] = dest_path
+
+                    if c_videos > 0 and f_videos == 0:
+                        success = True
+                        stats["summary"] = f"All {c_videos} videos downloaded successfully"
+                    elif c_videos > 0 and f_videos > 0:
+                        success = True
+                        stats["summary"] = f"{c_videos}/{t_videos} downloaded, {f_videos} failed"
+                    elif s_videos > 0 and f_videos == 0:
+                        success = True
+                        stats["summary"] = f"All {s_videos} videos already exist"
+                    elif f_videos > 0:
+                        success = False
+                        stats["summary"] = f"{f_videos}/{t_videos} videos failed"
+                    else:
+                        success = (dm.completed_videos > 0)
+                        stats["summary"] = "Finished"
             except Exception as e:
                 self.after(0, lambda: self._on_task_status(task_id, f"❌ Download Error: {e}", force_log=True))
                 success = False
+                stats["summary"] = f"Error: {e}"
             finally:
                 if task_id in self.active_tasks:
                     del self.active_tasks[task_id]
@@ -2771,7 +3084,7 @@ class App(ctk.CTk):
                     self.after(0, self._reset_buttons)
 
                 if on_complete:
-                    on_complete(success)
+                    on_complete(success, stats)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -3087,10 +3400,11 @@ class App(ctk.CTk):
         if directory:
             self.dir_var.set(directory)
 
-    def _open_download_dir(self):
-        path = self.dir_var.get()
-        os.makedirs(path, exist_ok=True)
+    def _open_folder(self, path):
+        if not path:
+            return
         try:
+            os.makedirs(path, exist_ok=True)
             if hasattr(os, 'startfile'):
                 os.startfile(path)
             elif sys.platform == 'darwin':
@@ -3099,6 +3413,10 @@ class App(ctk.CTk):
                 subprocess.run(['xdg-open', path])
         except Exception:
             pass
+
+    def _open_download_dir(self):
+        path = self.dir_var.get()
+        self._open_folder(path)
 
     def _get_cookie_file_path(self):
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")

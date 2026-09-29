@@ -105,6 +105,11 @@ class DownloadScheduler:
         with self._lock:
             jobs = self.get_all()
             is_repeat = repeat_daily or (isinstance(target_data, dict) and target_data.get("repeat_daily", False))
+            t_tot = 0
+            if isinstance(target_data, dict):
+                t_tot = target_data.get("total_items", 0)
+                if not t_tot and "videos" in target_data and target_data["videos"]:
+                    t_tot = len(target_data["videos"])
             job = {
                 "id": f"sched_{uuid.uuid4().hex[:8]}",
                 "name": name or f"Schedule {len(jobs) + 1}",
@@ -115,6 +120,12 @@ class DownloadScheduler:
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "Pending",  # Pending, Running, Completed, Failed, Cancelled
                 "log": "",
+                "total_items": t_tot,
+                "completed_items": 0,
+                "failed_items": 0,
+                "skipped_items": 0,
+                "summary": "",
+                "save_path": "",
             }
             jobs.insert(0, job)
             self.save_all(jobs)
@@ -137,14 +148,28 @@ class DownloadScheduler:
                     return True
             return False
 
-    def mark_status(self, job_id, status, log_msg=""):
-        """Update job status and log message, rescheduling if repeat_daily is True."""
+    def mark_status(self, job_id, status, log_msg="", summary=None, completed_items=None, total_items=None, failed_items=None, skipped_items=None, save_path=None):
+        """Update job status, tracking metrics, and log message, rescheduling if repeat_daily is True."""
         with self._lock:
             jobs = self.get_all()
             for j in jobs:
                 if j.get("id") == job_id:
                     tdata = j.get("target_data", {})
                     is_repeat = j.get("repeat_daily") or (isinstance(tdata, dict) and tdata.get("repeat_daily"))
+
+                    if summary is not None:
+                        j["summary"] = summary
+                    if completed_items is not None:
+                        j["completed_items"] = completed_items
+                    if total_items is not None:
+                        j["total_items"] = total_items
+                    if failed_items is not None:
+                        j["failed_items"] = failed_items
+                    if skipped_items is not None:
+                        j["skipped_items"] = skipped_items
+                    if save_path is not None:
+                        j["save_path"] = save_path
+
                     if status == "Completed" and is_repeat:
                         try:
                             cur_target = datetime.strptime(j["run_at"], "%Y-%m-%d %H:%M:%S")

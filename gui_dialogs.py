@@ -703,6 +703,14 @@ class SaveBatchDialog(ctk.CTkToplevel):
             "speed_limit": self.data.get("speed_limit", None),
         }
 
+        # Retain pre-fetched videos and total items count if available
+        if "total_items" in self.data and self.data["total_items"]:
+            opts["total_items"] = self.data["total_items"]
+        if "videos" in self.data and self.data["videos"]:
+            opts["videos"] = self.data["videos"]
+            if not opts.get("total_items"):
+                opts["total_items"] = len(self.data["videos"])
+
         batch_id = self.data.get("id")
         if batch_id:
             updates = {
