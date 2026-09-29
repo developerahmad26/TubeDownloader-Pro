@@ -2518,6 +2518,8 @@ class App(ctk.CTk):
             sel_mode = SELECTION_MODES.get(self.channel_sel_var.get(), "all")
             sel_val = self.channel_sel_value.get().strip()
 
+        create_subfolder = bool(settings.get("create_subfolder", True))
+        subfolder = name if create_subfolder else ""
         pkg = {
             "name": name,
             "type": tab,
@@ -2529,7 +2531,8 @@ class App(ctk.CTk):
             "selection_mode": sel_mode,
             "selection_value": sel_val,
             "download_dir": settings.get("download_dir", DEFAULT_DOWNLOAD_DIR),
-            "subfolder": settings.get("subfolder", ""),
+            "create_subfolder": create_subfolder,
+            "subfolder": subfolder,
             "embed_thumbnail": settings.get("embed_thumbnail", False),
             "download_subtitles": settings.get("download_subtitles", False),
             "subtitle_lang": settings.get("subtitle_lang", "en"),
@@ -2926,6 +2929,7 @@ class App(ctk.CTk):
         sel_mode = pkg.get("selection_mode", "all")
         sel_val = pkg.get("selection_value", "")
         subfolder = pkg.get("subfolder", "")
+        create_sub = pkg.get("create_subfolder")
 
         # Normalize naming scheme if user passed display label
         if naming in NAMING_SCHEMES:
@@ -3004,7 +3008,6 @@ class App(ctk.CTk):
                     if "videos" in pkg and pkg["videos"]:
                         videos = pkg["videos"]
                         pl_title = pkg.get("name", "")
-                        actual_subfolder = subfolder or pl_title
                     else:
                         is_chan = (btype == "channel")
                         self.after(0, lambda: self._on_task_status(task_id, f"🔍 Fetching {btype} video list...", force_log=True))
@@ -3019,7 +3022,14 @@ class App(ctk.CTk):
                             stats["summary"] = f"Failed to fetch {btype} videos"
                             return
                         videos, pl_title, _ = result
+
+                    # Respect create_subfolder setting strictly (never create subfolder if unticked)
+                    if create_sub is False:
+                        actual_subfolder = ""
+                    elif create_sub is True:
                         actual_subfolder = subfolder or pl_title
+                    else:
+                        actual_subfolder = subfolder if subfolder else ""
 
                     # Update total items count in task counter and persistent record as soon as list is fetched
                     if videos:
@@ -3858,6 +3868,7 @@ class App(ctk.CTk):
             "naming_scheme": settings['naming_scheme'],
             "custom_prefix": settings['custom_prefix'],
             "download_dir": settings['download_dir'],
+            "create_subfolder": settings['create_subfolder'],
             "subfolder": subfolder,
             "embed_thumbnail": settings['embed_thumbnail'],
             "download_subtitles": settings['download_subtitles'],

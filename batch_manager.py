@@ -110,6 +110,7 @@ class BatchManager:
                 "selection_mode": opts.get("selection_mode", "all"),
                 "selection_value": opts.get("selection_value", ""),
                 "download_dir": opts.get("download_dir", DEFAULT_DOWNLOAD_DIR),
+                "create_subfolder": opts.get("create_subfolder", bool(opts.get("subfolder", ""))),
                 "subfolder": opts.get("subfolder", ""),
                 "embed_thumbnail": opts.get("embed_thumbnail", False),
                 "download_subtitles": opts.get("download_subtitles", False),

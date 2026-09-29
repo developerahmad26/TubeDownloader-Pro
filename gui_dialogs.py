@@ -643,7 +643,9 @@ class SaveBatchDialog(ctk.CTkToplevel):
         self.thumb_var = ctk.BooleanVar(value=bool(self.data.get("embed_thumbnail", False)))
         ctk.CTkCheckBox(cb_row, text="Embed Thumbnail", variable=self.thumb_var, text_color="#cbd5e1").pack(side="left", padx=(0, 15))
         self.sub_var = ctk.BooleanVar(value=bool(self.data.get("download_subtitles", False)))
-        ctk.CTkCheckBox(cb_row, text="Download Subtitles", variable=self.sub_var, text_color="#cbd5e1").pack(side="left")
+        ctk.CTkCheckBox(cb_row, text="Download Subtitles", variable=self.sub_var, text_color="#cbd5e1").pack(side="left", padx=(0, 15))
+        self.subfolder_var = ctk.BooleanVar(value=bool(self.data.get("create_subfolder", bool(self.data.get("subfolder", False)))))
+        ctk.CTkCheckBox(cb_row, text="Auto Subfolder", variable=self.subfolder_var, text_color="#cbd5e1").pack(side="left")
 
         # Buttons
         btn_box = ctk.CTkFrame(container, fg_color="transparent")
@@ -687,6 +689,7 @@ class SaveBatchDialog(ctk.CTkToplevel):
         sel_mode = SELECTION_MODES.get(sel_key, "all")
 
         chosen_dir = self.dir_entry.get().strip() or DEFAULT_DOWNLOAD_DIR
+        create_subfolder = self.subfolder_var.get()
 
         opts = {
             "quality": self.quality_var.get(),
@@ -696,7 +699,8 @@ class SaveBatchDialog(ctk.CTkToplevel):
             "selection_mode": sel_mode,
             "selection_value": self.sel_val_entry.get().strip(),
             "download_dir": chosen_dir,
-            "subfolder": self.data.get("subfolder", ""),
+            "create_subfolder": create_subfolder,
+            "subfolder": (self.data.get("subfolder") or name) if create_subfolder else "",
             "embed_thumbnail": self.thumb_var.get(),
             "download_subtitles": self.sub_var.get(),
             "subtitle_lang": self.data.get("subtitle_lang", "en"),
