@@ -77,27 +77,57 @@ COMMON_PHRASE_REWRITES = [
 
 
 def load_rules():
-    """Load user title rewriting rules from title_rules.json."""
+    """Load user title rewriting rules from title_rules.json with auto-recovery."""
     if os.path.exists(RULES_FILE):
         try:
             with open(RULES_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
                 rules = dict(DEFAULT_RULES)
-                rules.update(saved)
+                if isinstance(saved, dict):
+                    rules.update(saved)
                 return rules
         except Exception:
-            pass
+            bak_path = f"{RULES_FILE}.bak"
+            if os.path.exists(bak_path):
+                try:
+                    with open(bak_path, "r", encoding="utf-8") as f:
+                        saved = json.load(f)
+                        rules = dict(DEFAULT_RULES)
+                        if isinstance(saved, dict):
+                            rules.update(saved)
+                        return rules
+                except Exception:
+                    pass
     return dict(DEFAULT_RULES)
 
 
 def save_rules(rules):
-    """Save title rewriting rules to title_rules.json."""
+    """Save title rewriting rules to title_rules.json atomically."""
+    import shutil
+    tmp_path = f"{RULES_FILE}.tmp"
+    bak_path = f"{RULES_FILE}.bak"
     try:
-        with open(RULES_FILE, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(rules, f, indent=4, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+
+        if os.path.exists(RULES_FILE):
+            try:
+                shutil.copy2(RULES_FILE, bak_path)
+            except Exception:
+                pass
+
+        os.replace(tmp_path, RULES_FILE)
         return True
     except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
         return False
+
 
 
 def _clean_base_title(title, rules):

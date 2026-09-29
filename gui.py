@@ -3400,8 +3400,19 @@ class App(ctk.CTk):
 
     def _cancel_download(self):
         if self.dm.is_downloading:
-            self.dm.cancel()
-            self._update_status("⚠️ Cancelling download...")
+            cur_dir = self.dir_var.get() if hasattr(self, "dir_var") else None
+            self.dm.cancel(target_dir=cur_dir)
+            self._update_status("⚠️ Cancelling download & sweeping temporary files...")
+            if hasattr(self, "_active_inline_count_label") and self._active_inline_count_label:
+                try:
+                    self._active_inline_count_label.configure(text="🛑 Cancelling...")
+                except Exception:
+                    pass
+            if hasattr(self, "_active_inline_title_label") and self._active_inline_title_label:
+                try:
+                    self._active_inline_title_label.configure(text="▶ Cancelling active video...")
+                except Exception:
+                    pass
 
     def _reset_buttons(self):
         self.download_btn.configure(state="normal")

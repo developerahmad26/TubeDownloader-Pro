@@ -237,10 +237,28 @@ class DownloadManager:
                 return p
         return None
 
-    def cancel(self):
-        """Cancel the current download."""
+    def clean_part_files(self, directory):
+        """Remove broken or leftover partial download files."""
+        if not directory or not os.path.exists(directory):
+            return
+        try:
+            for f in os.listdir(directory):
+                if f.endswith(('.part', '.ytdl', '.temp', '.tmp')):
+                    full_p = os.path.join(directory, f)
+                    try:
+                        os.remove(full_p)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def cancel(self, target_dir=None):
+        """Cancel the current download and optionally sweep partial files."""
         self.cancel_flag = True
         self.current_status = "Cancelling..."
+        if target_dir:
+            threading.Thread(target=lambda: self.clean_part_files(target_dir), daemon=True).start()
+
 
     def _normalize_channel_url(self, url):
         """Ensure channel URL points to /videos tab for complete listing."""

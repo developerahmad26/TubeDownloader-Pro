@@ -80,14 +80,20 @@ fi
 [ -f "$HOME/.deno/bin/deno" ] && export PATH="$HOME/.deno/bin:$PATH"
 which xclip >/dev/null 2>&1 || ($SUDO apt-get install -y xclip --quiet 2>/dev/null || true)
 
-# 7. Auto-detect GUI Display if not set
-if [ -z "$DISPLAY" ]; then
-    for xsock in /tmp/.X11-unix/X*; do
+# Ensure all scripts have executable permission
+chmod +x "$DIR"/*.sh 2>/dev/null || true
+
+# 7. Auto-detect and verify working GUI Display
+if [ -z "$DISPLAY" ] || ! python3 -c "import tkinter; t=tkinter.Tk(); t.destroy()" 2>/dev/null; then
+    for xsock in $(ls -1r /tmp/.X11-unix/X* 2>/dev/null); do
         if [ -e "$xsock" ]; then
             disp_num=$(basename "$xsock" | sed 's/X//')
-            export DISPLAY=":${disp_num}.0"
-            echo "[*] Auto-detected DISPLAY=$DISPLAY"
-            break
+            test_disp=":${disp_num}.0"
+            if python3 -c "import tkinter; t=tkinter.Tk(screenName='$test_disp'); t.destroy()" 2>/dev/null; then
+                export DISPLAY="$test_disp"
+                echo "[*] Connected to active GUI Display: $DISPLAY"
+                break
+            fi
         fi
     done
 fi

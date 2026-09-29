@@ -77,7 +77,7 @@ DEFAULT_APP_SETTINGS = {
 
 
 def load_app_settings():
-    """Load user-defined default settings from settings.json."""
+    """Load user-defined default settings from settings.json with auto-recovery."""
     import json
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -88,17 +88,45 @@ def load_app_settings():
                     res.update(data)
                 return res
         except Exception:
-            pass
+            bak_path = f"{SETTINGS_FILE}.bak"
+            if os.path.exists(bak_path):
+                try:
+                    with open(bak_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        res = dict(DEFAULT_APP_SETTINGS)
+                        if isinstance(data, dict):
+                            res.update(data)
+                        return res
+                except Exception:
+                    pass
     return dict(DEFAULT_APP_SETTINGS)
 
 
 def save_app_settings(settings):
-    """Save user-defined default settings to settings.json."""
-    import json
+    """Save user-defined default settings to settings.json atomically."""
+    import json, shutil
+    tmp_path = f"{SETTINGS_FILE}.tmp"
+    bak_path = f"{SETTINGS_FILE}.bak"
     try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=4, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                shutil.copy2(SETTINGS_FILE, bak_path)
+            except Exception:
+                pass
+
+        os.replace(tmp_path, SETTINGS_FILE)
         return True
     except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
         return False
+
 
